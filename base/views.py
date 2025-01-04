@@ -348,6 +348,7 @@ def extend_post(request):
         else:
             context['user_pfp'] = "None"
         context['community_name'] = Community.objects.get(id = int(context['post']['community'])).name
+        context['user_id'] = request.user.id
         return Response(context, status = 200)
     else:
         return Response(status=301)
