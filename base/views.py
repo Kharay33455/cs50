@@ -30,14 +30,32 @@ def get_all_from_person(request, person):
         context['pfp'] = add_base(request, context['pfp'])
     context['post']= []
 
+    # get all posts shared by person
+    allegs = Allegiance.objects.filter(user = user, shared = True)
+
+    posts = []
+    for _ in allegs:
+        posts.append(_.post)
 
     # fetch and serialize user's post
-    posts = Post.objects.filter(op = user).order_by('-posted')
+    _posts = Post.objects.filter(op = user)
+    for _p in _posts:
+        if _p not in posts:
+            posts.append(_p)
+    
+    # merge users's post with shared posts
+    
     for post in posts:
+        original_poster = Person.objects.get(user = post.op)
         _post = PostSerializer(post)
         # Loop through all medias and append base url.
         i = 1
         _context = _post.data
+        _context['op_display_name'] = original_poster.display_name
+        _context['op_user_name'] = original_poster.user.username
+        _context['op_user_id'] = original_poster.user.id
+        if original_poster.pfp:
+            _context['op_pfp'] = add_base(request, '/media/' + str(original_poster.pfp))
         _context['post_id'] = post.id
         allegiance, created = Allegiance.objects.get_or_create(user = request.user, post = post)
         _context['allege'] = allegiance.allegiance
@@ -60,6 +78,10 @@ def get_all_from_person(request, person):
                 
             i += 1
         context['post'].append(_context)
+    print(context)
+    context['post'] = sorted(context['post'], key = lambda x: x['posted'], reverse=True)
+    print('\n\n\n\n\n\n\n\n')
+    print(context)
     return context
     
 
@@ -79,6 +101,7 @@ def get_person(request):
         if context == None:
             context = {}
         context['csrf'] = get_token(request)    
+        context['request_id'] = request.user.id
         return Response(context, status=200)
     else:
         context = {}
