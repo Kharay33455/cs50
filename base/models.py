@@ -22,10 +22,11 @@ class Person(models.Model):
 # class to store community details
 class Community(models.Model):
     creator = models.ForeignKey(Person, on_delete=models.CASCADE)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=50)
     is_private = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f'{self.name} by {self.creator}'

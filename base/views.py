@@ -817,3 +817,40 @@ def update_person(request):
     context['msg'] = 'person was updated succesfully'
     # tell user save was successful
     return Response(context, status=200)
+
+
+# create new community, accept post and get requests
+@api_view(['GET', 'POST'])
+def create_new_community(request):
+    # check for authentication
+    if not request.user.is_authenticated:
+        return Response({'err': 'Sign in to continue'}, status=301)
+    # check method of request
+    if request.method == 'POST':
+        # get data from server and remove whitespaces
+        data = request.data
+        name = str(data['name']).strip()
+        description = str(data['description']).strip()
+        is_private = str(data['isPrivate']).strip()
+
+        # verify name validity
+        if name == "":
+            return Response({'err':'Name cannot be blank'}, status= 400)
+        
+        """Create community"""
+        # get person creating the community
+        _person = Person.objects.get(user =  request.user)
+        # create community
+        new_community = Community.objects.create(creator = _person, name = name)
+        if is_private == 'true':
+            new_community.is_private = True
+        if description != "":
+            new_community.description = description
+        new_community.save()
+        PersonCommunity.objects.create(person = _person, community = new_community, isMod = True)
+
+        return Response({'id': new_community.id}, status=200)
+    # if get, return csrf token to send post request with
+    else:
+        csrf = get_token(request)
+        return Response({'csrf':csrf}, status=200)

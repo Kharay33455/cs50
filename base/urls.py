@@ -15,10 +15,11 @@ urlpatterns = [
     path('community', views.community, name='community'),
     path('get-community-posts', views.get_post_by_community, name='getcps'),
     path('get-notifs', views.get_notifications, name='getnotifs'),
-    path('join-community', views.join_community, name='join-community'),
-    path('community-req', views.community_request, name='community-req'),
+    path('join-community', views.join_community, name='join_community'),
+    path('community-req', views.community_request, name='community_req'),
     path('register', views.register_request, name='register'),
-    path('update-person', views.update_person, name='update-person'),
+    path('update-person', views.update_person, name='update_person'),
+    path('new-community', views.create_new_community, name='new_community')
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
