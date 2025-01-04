@@ -28,12 +28,15 @@ def process_time(time, true_time = False):
         time = 'Yesterday'
     return time
 
+# base api for chat section
 @api_view(['GET'])
 def chat(request):
+    # check for authentication
     if request.user.is_authenticated:
-
+        # get all chats where user is initiator or the person a chat connection is being initiated with
         _chats = Chat.objects.filter(user_1 = request.user.id)
         __chats = Chat.objects.filter(user_2 = request.user.id)
+        # list to store all chat objects
         chats = []
         def get_chats(chat_set):
             _other_user = Person.objects.get(user= User.objects.get(id = chat_set['other']))
@@ -46,26 +49,35 @@ def chat(request):
             _chat_ = {'chat': chat_set['chat'], 'other_user':other_user}
             chats.append(_chat_)
         
+        # serialize chats
         def serialize_chat(chat):
+            # get all messages associated with the chat to find the last chat
             _message = Message.objects.filter(chat = chat).order_by("-created").first()
-
-            
+            # serialize chat
             _chat = ChatSerializer(chat)
             _chat_ = _chat.data
+            # append last message and the time it was sent
             _chat_['last_text'] = _message.message
             _chat_['last_text_time'] = str(_message.created)
+
             return _chat_
 
+        # loop through all chat objects and serialize
         for c in _chats:
             _chat = {'chat': serialize_chat(c), 'other': c.user_2}
             get_chats(_chat)
+        
         for c in __chats:
             _chat = {'chat': serialize_chat(c), 'other': c.user_1}
             get_chats(_chat)
-        context = {}
-        context['chats'] = sorted(chats, key=lambda x : x['chat']['last_text_time'], reverse=True)
-        _person = Person.objects.get(user = request.user)
 
+        # construct return response
+        context = {}
+        # sort chats by time. Showing the latest first
+        context['chats'] = sorted(chats, key=lambda x : x['chat']['last_text_time'], reverse=True)
+
+        # append user profile picture
+        _person = Person.objects.get(user = request.user)
         if _person.pfp:
             context['pfp'] = add_base(request , "/media/"+ str(_person.pfp))
         else:
@@ -74,50 +86,64 @@ def chat(request):
     else:
         return Response({'err':'Sign in to see your messages'},status=301)
 
-
+# message_s function to prepare chat for front end
 def message_s(request, messages):
+    # dictionaty to store results
     context = {}
     message_list = []
+    # loop through al message objects in the query set
     for m in messages:
-
+        # serialize message
         _message = MessageSerializer(m)
         _message_ = _message.data
-
+        # filter message from and message to
         if m.user.user == request.user:
             _message_['from'] = False
         else:
             _message_['from'] = True
+        # check for media, if one is avaiable, run add_base() to add the host to url
         if m.media:
             _message_['media'] = add_base(request, _message_['media'])
+        # get the tine created for the mesage
         _message_['time'] = process_time(_message_['created'], true_time=True)
         message_list.append(_message_)
     context['messages'] = message_list
+    # get csrf to send new messages securely
     context['csrf'] = get_token(request)
 
     return context
 
-
+# show chats 
 @api_view(['GET'])
 def show_chat(request):
+    # get chat ID from request object and use it to get the chat object
     chat_id = request.GET.get('id')
     chat = Chat.objects.get(id = chat_id)
+    # get all messages associated with the chat and return json
     messages = Message.objects.filter(chat = chat)
+    # run the message_s() function. It takes messages and request and returns 
     context = message_s(request, messages)
     return Response(context, status=200)
 
 
+# api for processing new messages sent
 @api_view(['GET', 'POST'])
 def send_message(request):
+    # get text and strip of white spaces
     text = str(request.data['caption'])
     text = text.strip()
+    # check if text is an empty string
     if text == '':
         text = None
+    # check for photo and append, if none, return none as image
     if request.FILES.get('image'):
         image = request.FILES.get('image')
     else:
         image = None
+    # if both image and text is null, then it's not a valid message.
     if text == None and image == None:
         return Response({'msg':'No valid message'}, status= 201) 
+    # if all is well, get chat and create new message
     chat_id = request.data['id']
     chat = Chat.objects.get(id = chat_id)
     chat_user = ChatUser.objects.get(user = request.user)

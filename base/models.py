@@ -25,7 +25,7 @@ class Community(models.Model):
     name = models.CharField(max_length=200)
     is_private = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
-    updated = models.DateTimeField()
+    updated = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f'{self.name} by {self.creator}'
@@ -63,6 +63,7 @@ class Post(models.Model):
 class Allegiance(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE) # user
     post = models.ForeignKey(Post, on_delete=models.CASCADE) # the post
+    # like, comment, dislike, ghost
     allegiance = models.CharField(max_length = 10, default=None, blank=True, null=True) # user's allegiance
     shared = models.BooleanField(default=False) # check if user has shared this post
 
@@ -83,7 +84,7 @@ class Comment(models.Model):
 class PersonCommunity(models.Model):
     person = models.ForeignKey(Person, on_delete=models.CASCADE)
     community = models.ForeignKey(Community, on_delete=models.CASCADE)
-    isMod = models.BooleanField(default=False)
+    isMod = models.BooleanField(default=False) # are they a mod?
     joined = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -102,6 +103,7 @@ class Notification(models.Model):
     def __str__(self):
         return f'{self.type} notification object for {self.person}'
 
+# request objects to join new community
 class JoinRequest(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     community = models.ForeignKey(Community, on_delete=models.CASCADE)
@@ -110,6 +112,7 @@ class JoinRequest(models.Model):
     def __str__(self):
         return f'{self.user.username} request to join {self.community.name}'
     
+# Model to save unexpected errors
 class Error(models.Model):
     error = models.TextField()
     date = models.DateTimeField(auto_now_add=True)

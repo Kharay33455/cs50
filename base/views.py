@@ -20,6 +20,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+# function to get details about person from person object
 def get_all_from_person(request, person):
     context = {}
     serializer = PersonSerializer(person)
@@ -84,7 +85,7 @@ def get_all_from_person(request, person):
     print(context)
     return context
     
-
+# function to return json about person.
 @api_view(['GET'])
 def get_person(request):
     if request.user.is_authenticated:
@@ -96,19 +97,22 @@ def get_person(request):
             _person = Person.objects.get(user = user)
         else:
             _person = Person.objects.get(user= request.user)
-        
+        # return dictionary. Context is None if no matching posts exists, return an empty dictionary instead
         context = get_all_from_person(request=request, person=_person)
         if context == None:
             context = {}
-        context['csrf'] = get_token(request)    
+        # get csrf token to pass request with
+        context['csrf'] = get_token(request) 
+        # user id to help track user to post id relationship on frontend   
         context['request_id'] = request.user.id
         return Response(context, status=200)
     else:
+        # If user isnt signed in, redirect them to login
         context = {}
         context['err'] = 'Sign in to continue'
         return Response(context, status=301)
 
-
+# function to format number count.
 def thousands(num):
     num = int(num)
     if num > 999:
@@ -116,17 +120,22 @@ def thousands(num):
         return f'{num}K'
     else:
         return str(num)
-    
+
+# append host url to image to allow them be queried from outside app
 def add_base(request, string):
     base_url =  str(request.build_absolute_uri('/'))
     string = base_url + str(string[1:])
     return string
 
     
+# home screen view
 @api_view(['GET'])
 def base(request):
+    # get all posts
     posts = Post.objects.all().order_by('?')
+    # dictionary to store posts
     context = {'posts':[], 'user_data': {}}
+    #  get user pfp if available
     user_pfp = "None"
     if request.user.is_authenticated:
         context['user_data']['id'] = request.user.id
@@ -147,27 +156,33 @@ def base(request):
         # get op id. WE have edited it to name in down this function.
         _post['op_id'] = _post['op']
         _post['post_id'] = post.id
-        # get post allegiance
+        # get post allegiance if user is signed in
         if request.user.is_authenticated:
             allege_obj, created = Allegiance.objects.get_or_create(user = request.user, post = post)
             _post['allege'] = allege_obj.allegiance
             _post['is_shared'] = allege_obj.shared
+        # get all comments, count and save to post.comments
         comments = Comment.objects.filter(post = post)
         _post['comments'] = len(comments)
         post.comments = _post['comments']
         post.save()
+        # get post community, append name and privacy to return objects
         post_community = Community.objects.get(id = _post['community'])
         _post['community_name'] = post_community.name
         _post['community_is_private'] = post_community.is_private
         context['posts'].append(_post)
 
+    # generate extra data for post
     for c in context['posts']:
         i = 1
+        # append all media
         while (i < 5):
             if c[f'media{i}']:
                 c[f'media{i}'] = add_base(request, c[f'media{i}'])
             i += 1
+        # get post owner
         person = Person.objects.get(user = c['op'])
+        # append all details
         c['op'] = person.user.username
         c['display'] = person.display_name
         c['likes'] = thousands(c['likes'])
@@ -175,38 +190,48 @@ def base(request):
         c['ghost_likes'] = thousands(c['ghost_likes'])
         c['comments'] = thousands(c['comments'])
         c['shares'] = thousands(c['shares'])
+        # if person ha profile picture, append profile picture
         if person.pfp:
             c['oppfp'] = add_base(request, "/media/"+str(person.pfp))
+        # truncate post and only return the first 150 values
         if len(c['post']) > 150:
             c['post'] = c['post'][0:150] + "..."
+    # return json
     return Response(context, status=200)
 
-
+# testing static config
 def bases(request):
+
     post = Post.objects.first()
     return render(request, 'base/index.html', {'post': post})
 
+# check bad data in username. ONly accepts alphanumric values
 def check_bad_data(data):
     strings = string.ascii_lowercase + string.ascii_uppercase+ string.digits
     for a in data:
         if a not in strings:
             return 1
+    # make sure username is also under 30 characters
     if len(str(data)) > 30:
         return 1
     return 0
 
 
+# login request
 @api_view(['GET','POST'])
 def login_request(request):
-
+    # check if method is post
     if request.method == 'POST':
+        # get details sent to backend from frontend
         username = request.data.get('name')
         password = request.data.get('pass')
+        # run the check data function, return error if data is bad
         if check_bad_data(username) == 1:
             context = {'err':'bad data'}
             return Response(context, status=400)
-        
+        # if not,try to authenticate user
         user = authenticate(request, username=username, password = password)
+        # on succes, login user, ge their details and return
         if user is not None:
             login(request, user)
             _person = Person.objects.get(user = user)
@@ -216,6 +241,7 @@ def login_request(request):
             context['msg'] = 'success'
             user = PersonSerializer()
             return Response(context , status=200)
+        # alert user of invalid password
         else:
             # In case of invalid credentials, tell user and reappend new csrf token
             return Response({'err': 'Invalid username or passoword'}, status=401)
@@ -226,9 +252,12 @@ def login_request(request):
         context['csrf'] = csrf
         return Response(context, status=200)
 
+# log out request
 @api_view(['GET'])
 def logout_request(request):
-    logout(request)
+    # make sure their session is still valid to avoid errors
+    if request.user.is_authenticated:
+        logout(request)
     return Response({'msg':'Logged out'}, status=200)
 
 
@@ -313,12 +342,14 @@ def allegiances(request):
     else:
         return Response({'err:Sign in to continue'}, status=301)
     
+# Extend post
 @api_view(['GET'])
-@csrf_exempt
 def extend_post(request):
+    # check if user is authenticated
     if request.user.is_authenticated:
-
+        # get data sent with request
         post_id = request.GET.get('postId')
+        # get psot, alleguance for signed in user and details of the post owner
         post = Post.objects.get(id = post_id)
         allegiance, created = Allegiance.objects.get_or_create(user = request.user, post = post)
         _poster = Person.objects.get(user = post.op)
@@ -332,9 +363,11 @@ def extend_post(request):
         context['post']['is_shared'] = allegiance.shared
         context['post']['op_username'] = _poster.user.username
         context['post']['op_display_name'] = _poster.display_name
+        # append their dp only if they have one
         if _poster.pfp:
             context['post']['op_pfp'] = add_base(request, poster['pfp'])
 
+        # append all media
         i = 1
         while i < 5:
             if context['post'][f'media{i}']:
@@ -343,22 +376,32 @@ def extend_post(request):
         _person =  Person.objects.get(user = request.user)
         _person_ = PersonSerializer(_person)
         person = _person_.data
+        # user profile picture if available
         if _person.pfp:
             context['user_pfp'] = add_base(request , person['pfp'])
         else:
             context['user_pfp'] = "None"
         context['community_name'] = Community.objects.get(id = int(context['post']['community'])).name
         context['user_id'] = request.user.id
+        # return context dictionary as json
         return Response(context, status = 200)
     else:
+        # if they're not signed in, redirect to login
         return Response(status=301)
 
-@csrf_exempt
+# add comments
 @api_view(['GET'])
 def add_comment(request):
+    # incase of a request to comment without authenticated
+    if request.user.is_authenticated == False:
+        return Response(status=400)
+    # get comment and psot id from user
     comment = request.GET.get('comment')
     post_id = request.GET.get('postId')
     post = Post.objects.get(id = post_id) 
+    
+
+    # function to get all comments associted with a post
     def get_all_comments():
         comments = Comment.objects.filter(post = post).order_by('-created')
         comment_list = []
@@ -380,6 +423,7 @@ def add_comment(request):
         
         return return_dict
 
+    # function to get all comments and append it to context dictionary
     def get_all():
         content = get_all_comments()
         context['comments'] = content['comment_list']
@@ -387,16 +431,20 @@ def add_comment(request):
 
     # dict to store response
     context = {}
+    # user sent empty string as comment
     if str(comment).strip() == "":
         # get all comments and add to dict as comments
         get_all()        
         return Response(context, status=200)
+    # create new comment
     comment = Comment.objects.create(user = request.user, post = post, comment = comment)
+    # if commenter is not post owenr, notify post owner of comment to their post
     if request.user != post.op:
         Notification.objects.create(type='commented', message ="commented on your post", person = Person.objects.get(user = request.user), associated_user = post.op, id_item = post_id)
     get_all()
     return Response(context, status=200)
 
+# fucntion to prepare community objects for front end from community object array
 def serialize(request, comm_obj_list):
     _list = []
     for i in comm_obj_list:
@@ -408,42 +456,63 @@ def serialize(request, comm_obj_list):
         _comm_obj_list_['name'] = community_dets.name
         _comm_obj_list_['is_private'] = community_dets.is_private
         _comm_obj_list_['member_count'] = len(PersonCommunity.objects.filter(community = community_dets))
+        # check if user requesting community page has sent a join request to this commuity that remains unaprroed.
+        # This is to alert the front end of the request and prevent theem from sending another
         try:
             _joined = JoinRequest.objects.get(user = request.user, community = i.community )
             _comm_obj_list_['requested'] = True
         except:
             _comm_obj_list_['requested'] = False
+        # add object tt list
         _list.append(_comm_obj_list_)
     return _list
 
 
-
+# community api request 
 @api_view(['GET'])
 def community(request):
+    # checking for authentication
     if request.user.is_authenticated:
-        which = request.GET.get('which')
+        # get all data passed with request
+        which = request.GET.get('which') # decide if you want to see your communities or communities near you
+
+        # location of user. Gotten from expo 
         lat = request.GET.get('lat')
         long = request.GET.get('long')
+
+         # value of range to search for new communities
         dist = request.GET.get('dist')
+
+        #get person object and use it to filter communities belinging to that perosn if which is mine
         __person =  Person.objects.get(user = request.user)
         context = {}
         if which == 'mine':
             comm_objs = PersonCommunity.objects.filter(person = __person).order_by('?')
 
+        # if they are requesting communities around them, get all users close to them within the range of request
+        # displau coomunities those users are in that user isn't in
         if which == 'near':
             __person.long = long
             __person.lat = lat
             __person.save()
+            # find all persons within range of longitue of user plus or minus distance... DO same for lat
             persons_long = Person.objects.filter(long__lt = float(long) + float(dist)).filter(long__gt = float(long) -float(dist))
             persons_lat = Person.objects.filter(lat__lt = float(lat) + float(dist)).filter(lat__gt = float(lat) -float(dist))
+            
+            # get players that fall inn both category. IE: long and lat is close to user
             persons = persons_lat & persons_long
+            # get all communities associated with all users matching query
             query_set = []
             communities = []
+            # get all communities user belongs to
             _communities = PersonCommunity.objects.filter(person = __person)
             for c in _communities:
                 communities.append(c.community)
+            # loop throught close by users
             for person in persons:
+                # get all communities close to person
                 comm_obj = PersonCommunity.objects.filter(person = person)
+                # loop through communities and check user isn't already a memner. If they're not, append to list storing community
                 for _comm_obj in comm_obj:
                     if _comm_obj.community not in communities:
                         if _comm_obj not in query_set:
@@ -451,10 +520,12 @@ def community(request):
                             communities.append(_comm_obj.community)
 
             comm_objs = query_set
+            # increase unless you're over 360... IE: globe covered.
             if float(dist) < 400 and float(dist) > -400:
                 context['dist'] = float(dist) * 2
             else:
                 context['dist'] = float(dist)
+        # return community as object
         context['communities'] = serialize(request, comm_objs)
         if __person.pfp:
             __person_ = PersonSerializer(__person)
@@ -466,14 +537,22 @@ def community(request):
     else:
         return Response({'err':'Sign in to view communities'}, status=301)
 
+# get community posts
 @api_view(['GET'])
 def get_post_by_community(request):
+    # get community id from request object and get community
     community_id = request.GET.get('id')
     _community = Community.objects.get(id = community_id)
+
+    # get data on user
     person = Person.objects.get(user = request.user)
     _person = PersonSerializer(person)
     _person_ = _person.data
+
+    # filter all posts belonging to user
     posts = Post.objects.filter(community = _community).order_by("-posted")
+
+    # loop through psot, serialize and append to post list
     post_list = []
     for post in posts:
         _allege, created = Allegiance.objects.get_or_create(post = post, user = request.user)
@@ -483,10 +562,12 @@ def get_post_by_community(request):
         _post = PostSerializer(post)
         _post_ = _post.data
         _post_['is_shared'] = _allege.shared
+        # append profile picture if it exists. append none instead
         if _op.pfp:
             _post_['oppfp'] = add_base(request, _op_['pfp'])
         else:
             _post_['oppfp'] = "None"
+        # add extra data about user    
         _post_['display'] = _op.display_name
         _post_['op'] = _op.user.username
         _post_['allege'] = _allege.allegiance
@@ -498,6 +579,7 @@ def get_post_by_community(request):
                 _post_[f'media{i}'] = add_base(request, _post_[f'media{i}'])
             i += 1
         post_list.append(_post_)
+    # construct context object
     context = {}
     context['post_list'] = post_list
     context['length'] = len(post_list)
@@ -506,6 +588,7 @@ def get_post_by_community(request):
     _com_dets['community_name'] = _community.name
 
     context['community_details'] = _com_dets
+    # append user pfp is they have one
     if _person_['pfp']:
         context['user_pfp'] = add_base(request, _person_['pfp'])
     else:
@@ -520,21 +603,32 @@ def get_post_by_community(request):
     return Response(context, status=200)
 
 
+# api to get all notifications
 @api_view(['GET'])
 def get_notifications(request):
+    # confirming authentication
     if request.user.is_authenticated:
+        # filter all notifications for user
         notifications = Notification.objects.filter(associated_user = request.user).order_by('-time')
+        # list of notification objects
         notif_list = []
+        # loop through query set
         for notif in notifications:
+            # get person who triggered the notification action
             person = notif.person
+            # serialize data
             _person = PersonSerializer(person)
             _person_ = _person.data
+            # serialize notification object
             _notif = NotificationSerializer(notif)
             _notif_ = _notif.data
+            # check if user has dp, if they do, append their dp
             if person.pfp:
                 _notif_['oppfp'] = add_base(request, _person_['pfp'])
+            # append extra data
             _notif_['user'] = _person_['display_name']
             _notif_['user_id'] = _person_['id']
+            # append post id to notification
             if notif.type == "commented" or notif.type == "liked-post" or notif.type == "ghost-liked" or notif.type == "disliked-post" or notif.type == "shared":
                 post = Post.objects.get(id = _notif_['id_item'])
                 _notif_['post_id'] = post.id
@@ -543,17 +637,21 @@ def get_notifications(request):
                 _comment = Comment.objects.get(id = _notif_['id'])
                 _notif_['post'] = _comment.comment
                 _notif_['post_id'] = _comment.post.id
+            # truncate notification text if one. Not all notification objects have messages appended to them. Use try and except block to prevent error
             try:            
                 if len(_notif_['post']) > 150:
                     _notif_['post'] = _notif_['post'][:150] + "..."
             except:
                 pass
-            
+
+            # append notification
             notif_list.append(_notif_)
+        # construct dictionary to return
         context = {}
         context['notif'] = notif_list
         _person__ = PersonSerializer(Person.objects.get(user = request.user))
         person_data = _person__.data
+        # get requesting user profile picture if they have one
         if person_data['pfp']:
             context['pfp'] = add_base(request, person_data['pfp'])
         else:
@@ -564,51 +662,30 @@ def get_notifications(request):
         return Response({'err':'Sign in to view your notifications'},status=301)
 @api_view(['GET'])
 def join_community(request):
-    """
-    _person = Person.objects.get(user = request.user)
-    long = _person.long
-    lat = _person.lat
-    dist = 25.0
-    persons_long = Person.objects.filter(long__lt = float(long) + float(dist)).filter(long__gt = float(long) -float(dist))
-    persons_lat = Person.objects.filter(lat__lt = float(lat) + float(dist)).filter(lat__gt = float(lat) -float(dist))
-    persons = persons_lat & persons_long
-    query_set = []
-    communities = []
-    _communities = PersonCommunity.objects.filter(person = _person)
-    for c in _communities:
-        communities.append(c.community)
-    for person in persons:
-        comm_obj = PersonCommunity.objects.filter(person = person)
-        for _comm_obj in comm_obj:
-            if _comm_obj.community not in communities:
-                if _comm_obj not in query_set:
-                    query_set.append(_comm_obj)
-                    communities.append(_comm_obj.community)
-    comm_objs = query_set
-    context = {}
-    context['communities'] = serialize(comm_obj_list= comm_objs) 
-    if _person.pfp:
-        context['pfp'] = add_base(request, '/media/'+ str(_person.pfp))
-    else:
-        context['pfp'] = "None"
-    context['dist'] = 25.01
-    """
-
+    # get community ID from request object and the matching community
     community_id = request.GET.get('communityId')
     community_obj = Community.objects.get(id = int(community_id))
+    # get person requesting to join the community
     person = Person.objects.get(user = request.user)
+
+    # if commuinty is pricate, make a reqyest and wait for mod to accept
     if community_obj.is_private == True:
         JoinRequest.objects.get_or_create(user = request.user, community = community_obj)
         return Response(status=202)
+    # else join community
     else:
         PersonCommunity.objects.get_or_create(person = person, community = community_obj)
         return Response(status=200)
 
+# accept request. Can only be done by mod
 @api_view(['GET'])
 def community_request(request):
+    # get person approving request
     person = Person.objects.get(user = request.user)
+    # get community request was sent to
     comm_id = request.GET.get('id')
     community_obj = Community.objects.get(id = comm_id )
+    # get relationshop betwwen user signed in and community object. Check if user is a mod
     rel = PersonCommunity.objects.get(person = person, community = community_obj)
     # make sure only mods can access data
     if rel.isMod == False:
@@ -617,18 +694,18 @@ def community_request(request):
     #accept or reject request
     item_id = int(request.GET.get('itemId'))
     action = int(request.GET.get('action'))
+
+
     try:
+        # get join request
         join_req  = JoinRequest.objects.get(id = item_id)
         user = User.objects.get(id = join_req.user.id)
         _community = join_req.community
         person = Person.objects.get(user = user)
         if action == 0:
-             #accept
-            
-            
+             #accept    
             PersonCommunity.objects.get_or_create(person = person, community = _community)
             join_req.delete()
-
             #notify user
             Notification.objects.get_or_create(type = "accepted-join", message = f", your request to join {_community.name} was accepted.", person = person, associated_user = user )
 
@@ -642,7 +719,7 @@ def community_request(request):
         Error.objects.create(error = e)
     
 
-
+    # get remaining request and send to user
     _join_requests = JoinRequest.objects.filter(community = community_obj)
     _join_list = []
     for _ in _join_requests:
