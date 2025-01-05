@@ -10,6 +10,8 @@ class Chat(models.Model):
     # storing chat user IDs and not the object themselves
     user_1 = models.IntegerField()
     user_2 = models.IntegerField()
+    user_1_has_read = models.BooleanField(default=False)
+    user_2_has_read = models.BooleanField(default=False)
 
     def __str__(self):
         return f'Chat obj between users with id {self.user_1} and {self.user_2}'

@@ -854,3 +854,4 @@ def create_new_community(request):
     else:
         csrf = get_token(request)
         return Response({'csrf':csrf}, status=200)
+    

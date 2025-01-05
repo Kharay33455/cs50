@@ -113,14 +113,19 @@ def message_s(request, messages):
 
     return context
 
+# function for take in an id of a chat and return all its messages in a query set
+def get_all_messages(chat_id):
+    chat = Chat.objects.get(id = chat_id)
+    # get all messages associated with the chat and return json
+    messages = Message.objects.filter(chat = chat)
+    return messages
 # show chats 
 @api_view(['GET'])
 def show_chat(request):
     # get chat ID from request object and use it to get the chat object
     chat_id = request.GET.get('id')
-    chat = Chat.objects.get(id = chat_id)
-    # get all messages associated with the chat and return json
-    messages = Message.objects.filter(chat = chat)
+    # get all messages for this chat id and store in query set
+    messages = get_all_messages(chat_id=chat_id)
     # run the message_s() function. It takes messages and request and returns 
     context = message_s(request, messages)
     return Response(context, status=200)
@@ -129,6 +134,8 @@ def show_chat(request):
 # api for processing new messages sent
 @api_view(['GET', 'POST'])
 def send_message(request):
+    if not request.user.is_authenticated:
+        return Response({'err':'Sign in to continue'}, status=301)
     # get text and strip of white spaces
     text = str(request.data['caption'])
     text = text.strip()
@@ -152,6 +159,7 @@ def send_message(request):
     _message_list = Message.objects.filter(chat = chat)
     context =  message_s(request, _message_list)
     return Response(context, status=200)
+
 
 # create a new post
 @api_view(['GET', 'POST'])
@@ -229,3 +237,40 @@ def new_post(request):
     else:
         # redirect to login with error
         return Response({'err':'Sign in to create a new post'}, status=301)
+    
+
+# new chat function
+@api_view(['GET'])
+def new_chat(request):
+    # confirm authentication
+    if not request.user.is_authenticated:
+        return Response({'err':'Sign in to start chat'}, status=301)
+    """Check if chat between requesting user and requested user exist"""
+    # get id of requested user from request.get dictionary and requesting user Id, store as user 1 and user 2.
+    user1 = int(request.GET.get('user1'))
+    user2 = request.user.id
+    # store id of chat in this variable
+    chat_id = None
+    # try to get if of chat between the two users and store in chat_id variable
+    try:
+        chat_id = Chat.objects.get(user_1 = user1, user_2 = user2).id
+    except Chat.DoesNotExist:
+        try:
+            chat_id = Chat.objects.get(user_1 = user2, user_2 = user1).id
+        except Chat.DoesNotExist:
+            new_chat, created = Chat.objects.get_or_create(user_1 = user1, user_2 = user2)
+            new_chat.save()
+            chat_id = new_chat.id
+    """Get other user display name and profile picture"""
+    _user1 =User.objects.get(id = user1)
+    _person = Person.objects.get(user = _user1)
+    context = {}
+    # append display name and pfp of other user to append to chat
+    context['other_display_name'] = _person.display_name
+    if _person.pfp:
+        context['other_pfp'] = add_base(request, "/media/"+ str(_person.pfp))
+    else:
+        context['other_pfp'] = None
+    context['id'] = chat_id
+    # return chat id to front end to navigate to chat
+    return Response(context, status=200)
