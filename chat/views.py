@@ -33,6 +33,10 @@ def process_time(time, true_time = False):
 def chat(request):
     # check for authentication
     if request.user.is_authenticated:
+        # set chat user to read
+        chat_user = ChatUser.objects.get(user = request.user)
+        chat_user.has_new_message = False
+        chat_user.save()
         # get all chats where user is initiator or the person a chat connection is being initiated with
         _chats = Chat.objects.filter(user_1 = request.user.id)
         __chats = Chat.objects.filter(user_2 = request.user.id)
@@ -127,13 +131,18 @@ def get_all_messages(chat_id, user_id):
     # set requesting user chat is read bool field to true.
     if user_id == chat.user_1:
         chat.user_1_has_read = True
+        other_user_id = chat.user_2
     else:
         chat.user_2_has_read = True
+        other_user_id = chat.user_1
     # save chat
     chat.save()
+    _dict = {}
     # get all messages associated with the chat and return json
     messages = Message.objects.filter(chat = chat)
-    return messages
+    _dict['messages'] = messages
+    _dict['other_user_id'] = other_user_id
+    return _dict
 
 
 # show chats 
@@ -144,7 +153,8 @@ def show_chat(request):
     # get all messages for this chat id and store in query set
     messages = get_all_messages(chat_id=chat_id ,user_id=request.user.id)
     # run the message_s() function. It takes messages and request and returns 
-    context = message_s(request, messages)
+    context = message_s(request, messages['messages'])
+    context['other_user_id'] = messages['other_user_id']
     return Response(context, status=200)
 
 
@@ -173,6 +183,20 @@ def send_message(request):
     chat_user = ChatUser.objects.get(user = request.user)
     message = Message.objects.create(message = text, media = image, chat = chat, user = chat_user)
     message.save()
+    "Get other user and change their has_new_message field to True"
+    # get other user Id and alert other user of their new message
+    if request.user.id == chat.user_1:
+        other_user_id = chat.user_2
+        chat.user_2_has_read = False
+    else:
+        chat.user_1_has_read = False
+        other_user_id = chat.user_1
+    chat.save() # save chat
+    # get chat object and set has_new_message to True
+    other_user = ChatUser.objects.get(user = User.objects.get(id = other_user_id))
+    other_user.has_new_message = True
+    other_user.save()
+
     _message_list = Message.objects.filter(chat = chat)
     context =  message_s(request, _message_list)
     return Response(context, status=200)

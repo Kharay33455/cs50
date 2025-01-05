@@ -854,4 +854,13 @@ def create_new_community(request):
     else:
         csrf = get_token(request)
         return Response({'csrf':csrf}, status=200)
-    
+
+"""Get footer details"""
+@api_view(['GET'])
+def footer_details(request):
+    if not request.user.is_authenticated:
+        return Response({'err':'not signed in'}, status=403)
+    has_new_message = ChatUser.objects.get(user = request.user).has_new_message
+    context = {}
+    context['has_new_message'] = has_new_message 
+    return Response(context, status=200)
