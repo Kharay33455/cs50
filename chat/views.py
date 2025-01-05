@@ -48,7 +48,8 @@ def chat(request):
             chat_set['chat']['time'] = process_time(chat_set['chat']['last_text_time'])
             _chat_ = {'chat': chat_set['chat'], 'other_user':other_user}
             chats.append(_chat_)
-        
+        #get user id to user in serialize chat fucntion
+        user_id = request.user.id
         # serialize chats
         def serialize_chat(chat):
             # get all messages associated with the chat to find the last chat
@@ -59,6 +60,10 @@ def chat(request):
             # append last message and the time it was sent
             _chat_['last_text'] = _message.message
             _chat_['last_text_time'] = str(_message.created)
+            if user_id == chat.user_1:
+                _chat_['is_read'] = chat.user_1_has_read
+            else:
+                _chat_['is_read'] = chat.user_2_has_read
 
             return _chat_
 
@@ -114,18 +119,30 @@ def message_s(request, messages):
     return context
 
 # function for take in an id of a chat and return all its messages in a query set
-def get_all_messages(chat_id):
+def get_all_messages(chat_id, user_id):
     chat = Chat.objects.get(id = chat_id)
+    """Get requesting user id and change their has_read bool field to true"""
+    # get user id check for user in chat object and sety has read to true
+
+    # set requesting user chat is read bool field to true.
+    if user_id == chat.user_1:
+        chat.user_1_has_read = True
+    else:
+        chat.user_2_has_read = True
+    # save chat
+    chat.save()
     # get all messages associated with the chat and return json
     messages = Message.objects.filter(chat = chat)
     return messages
+
+
 # show chats 
 @api_view(['GET'])
 def show_chat(request):
     # get chat ID from request object and use it to get the chat object
     chat_id = request.GET.get('id')
     # get all messages for this chat id and store in query set
-    messages = get_all_messages(chat_id=chat_id)
+    messages = get_all_messages(chat_id=chat_id ,user_id=request.user.id)
     # run the message_s() function. It takes messages and request and returns 
     context = message_s(request, messages)
     return Response(context, status=200)
@@ -251,7 +268,7 @@ def new_chat(request):
     user2 = request.user.id
     # store id of chat in this variable
     chat_id = None
-    # try to get if of chat between the two users and store in chat_id variable
+    # try to get id of chat between the two users and store in chat_id variable
     try:
         chat_id = Chat.objects.get(user_1 = user1, user_2 = user2).id
     except Chat.DoesNotExist:
