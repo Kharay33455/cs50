@@ -875,3 +875,14 @@ def footer_details(request):
     context['has_new_message'] = has_new_message 
     return Response(context, status=200)
 
+# exit community view
+@api_view(['GET'])
+def exit_commuity(request):
+    # get person, commuity ad use it to get the perosn community object. if succesful, delete.
+    _ = int(request.GET.get('communityId'))
+    comm = Community.objects.get(id = _)
+    try:
+        PersonCommunity.objects.get(person = Person.objects.get(user = request.user), community = comm).delete()
+    except Exception as e:
+        Error.objects.create(error = e)
+    return Response(status=200)
