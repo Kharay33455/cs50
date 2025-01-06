@@ -56,29 +56,37 @@ def chat(request):
         user_id = request.user.id
         # serialize chats
         def serialize_chat(chat):
-            # get all messages associated with the chat to find the last chat
-            _message = Message.objects.filter(chat = chat).order_by("-created").first()
-            # serialize chat
-            _chat = ChatSerializer(chat)
-            _chat_ = _chat.data
-            # append last message and the time it was sent
-            _chat_['last_text'] = _message.message
-            _chat_['last_text_time'] = str(_message.created)
-            if user_id == chat.user_1:
-                _chat_['is_read'] = chat.user_1_has_read
-            else:
-                _chat_['is_read'] = chat.user_2_has_read
+            try:
+                print(chat)
+                # get all messages associated with the chat to find the last chat
+                _message = Message.objects.filter(chat = chat).order_by("-created").first()
+                # serialize chat
+                _chat = ChatSerializer(chat)
+                _chat_ = _chat.data
+                # append last message and the time it was sent
+            
+                _chat_['last_text'] = _message.message
+                _chat_['last_text_time'] = str(_message.created)
+                if user_id == chat.user_1:
+                    _chat_['is_read'] = chat.user_1_has_read
+                else:
+                    _chat_['is_read'] = chat.user_2_has_read
+            except Exception as e:
+                print(e)
 
             return _chat_
 
+        if _chats:
         # loop through all chat objects and serialize
-        for c in _chats:
-            _chat = {'chat': serialize_chat(c), 'other': c.user_2}
-            get_chats(_chat)
-        
-        for c in __chats:
-            _chat = {'chat': serialize_chat(c), 'other': c.user_1}
-            get_chats(_chat)
+            for c in _chats:
+
+                _chat = {'chat': serialize_chat(c), 'other': c.user_2}
+                get_chats(_chat)
+
+        if __chats:
+            for c in __chats:
+                _chat = {'chat': serialize_chat(c), 'other': c.user_1}
+                get_chats(_chat)
 
         # construct return response
         context = {}
@@ -90,7 +98,8 @@ def chat(request):
         if _person.pfp:
             context['pfp'] = add_base(request , "/media/"+ str(_person.pfp))
         else:
-            context['pfp'] = 'None'        
+            context['pfp'] = 'None'    
+        context['csrf'] = get_token(request)    
         return Response(context, status = 200)
     else:
         return Response({'err':'Sign in to see your messages'},status=301)
@@ -315,3 +324,22 @@ def new_chat(request):
     context['id'] = chat_id
     # return chat id to front end to navigate to chat
     return Response(context, status=200)
+
+# delete a chat
+@api_view(['POST'])
+def delete_chat(request):
+    # get chat id
+    chat_id = request.data['chatId']
+    try:
+
+        # get chat
+        chat = Chat.objects.get(id = chat_id)
+        # confirm user deleting chat is chat member
+        if request.user.id != chat.user_1 and request.user.id != chat.user_2:
+            return Response(status= 400)
+        # now delete chat and inform front end of success
+        print(chat)
+        chat.delete()
+        return Response(status = 204)
+    except Chat.DoesNotExist:
+        return Response(status=204)

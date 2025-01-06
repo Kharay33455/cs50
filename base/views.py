@@ -836,6 +836,8 @@ def create_new_community(request):
         # verify name validity
         if name == "":
             return Response({'err':'Name cannot be blank'}, status= 400)
+        if len(name) > 50:
+            return Response("Name cannot be longer than 50 characters", status=400) # validate name length
         
         """Create community"""
         # get person creating the community
@@ -864,3 +866,4 @@ def footer_details(request):
     context = {}
     context['has_new_message'] = has_new_message 
     return Response(context, status=200)
+
