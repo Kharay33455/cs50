@@ -49,6 +49,7 @@ class Post(models.Model):
     ghost_likes = models.BigIntegerField(default=0)
     comments = models.BigIntegerField(default=0)
     shares = models.BigIntegerField(default=0)
+    isPrivate = models.BooleanField(default=True) # who can see post? community members or anyone?
     # Total interactions of any kind
     interactions = models.BigIntegerField(default=0)
     # Date posted

@@ -36,10 +36,11 @@ def get_all_from_person(request, person):
 
     posts = []
     for _ in allegs:
-        posts.append(_.post)
+        if not _.post.isPrivate:
+            posts.append(_.post)
 
     # fetch and serialize user's post
-    _posts = Post.objects.filter(op = user)
+    _posts = Post.objects.filter(op = user, isPrivate = False)
     for _p in _posts:
         if _p not in posts:
             posts.append(_p)
@@ -132,7 +133,7 @@ def add_base(request, string):
 @api_view(['GET'])
 def base(request):
     # get all posts
-    posts = Post.objects.all().order_by('?')
+    posts = Post.objects.filter(isPrivate = False).order_by('?')
     # dictionary to store posts
     context = {'posts':[], 'user_data': {}}
     #  get user pfp if available
@@ -202,8 +203,9 @@ def base(request):
 # testing static config
 def bases(request):
 
-    post = Post.objects.first()
-    return render(request, 'base/index.html', {'post': post})
+    posts = Post.objects.filter(isPrivate = False)
+    print(len(posts))
+    return render(request, 'base/index.html')
 
 # check bad data in username. ONly accepts alphanumric values
 def check_bad_data(data):
@@ -540,6 +542,7 @@ def community(request):
 # get community posts
 @api_view(['GET'])
 def get_post_by_community(request):
+    context = {}
     # get community id from request object and get community
     community_id = request.GET.get('id')
     _community = Community.objects.get(id = community_id)
@@ -548,9 +551,15 @@ def get_post_by_community(request):
     person = Person.objects.get(user = request.user)
     _person = PersonSerializer(person)
     _person_ = _person.data
-
-    # filter all posts belonging to user
-    posts = Post.objects.filter(community = _community).order_by("-posted")
+    # filter all posts belonging to community, If they're not a member, show only public posts
+    try:
+        _pc = PersonCommunity.objects.get(person = person, community = _community)
+        context['isMod'] = _pc.isMod
+        posts = Post.objects.filter(community = _community).order_by("-posted")
+    except PersonCommunity.DoesNotExist:
+        context['notMember'] = True
+        posts = Post.objects.filter(community = _community, isPrivate = False).order_by("-posted")
+    
 
     # loop through psot, serialize and append to post list
     post_list = []
@@ -580,12 +589,12 @@ def get_post_by_community(request):
             i += 1
         post_list.append(_post_)
     # construct context object
-    context = {}
     context['post_list'] = post_list
     context['length'] = len(post_list)
     _com_dets = {}
     _com_dets['community_is_private'] = _community.is_private
     _com_dets['community_name'] = _community.name
+    _com_dets['community_description'] = _community.description
 
     context['community_details'] = _com_dets
     # append user pfp is they have one
@@ -597,10 +606,9 @@ def get_post_by_community(request):
     # pass user id of current user
     context['user_id'] = request.user.id
     # check if user is mod of community
-    _person = Person.objects.get(user = request.user)
-    _pc = PersonCommunity.objects.get(person = _person, community = _community)
-    context['isMod'] = _pc.isMod
+
     return Response(context, status=200)
+
 
 
 # api to get all notifications

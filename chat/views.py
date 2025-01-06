@@ -252,9 +252,12 @@ def new_post(request):
 
             # get community to send post to
             community = Community.objects.get(id = comm_id)
-
+            if str(request.data['isPrivate']) == 'true':
+                is_private = True
+            else:
+                is_private = False
             #create post
-            new_post_obj = Post.objects.create(op = request.user, post = post, community = community)
+            new_post_obj = Post.objects.create(op = request.user, post = post, community = community, isPrivate = is_private)
             i = 1
             # append all media
             for media in image_list:
