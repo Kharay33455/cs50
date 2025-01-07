@@ -299,6 +299,7 @@ def allegiances(request):
             # if they are reacting to their own post, no need to inform them
             if request.user != post.op:
                 Notification.objects.get_or_create(type=type, message = message, person = person, associated_user = post.op, id_item = post_id)
+
             # set their new allegiance
             current_allegiance.allegiance = allege
         # check if this is a share, not just a like
@@ -665,6 +666,10 @@ def get_notifications(request):
             context['pfp'] = add_base(request, person_data['pfp'])
         else:
             context['pfp'] = 'None'
+        # just before notifications are returned to user, mark them all as seen in database but not in context dictionary to be returned
+        for _ in notifications:
+            _.is_seen = True
+            _.save()
         return Response(context, status=200)
     else:
         # redirect to login with error message for not authenticated users
@@ -872,7 +877,12 @@ def footer_details(request):
     if not request.user.is_authenticated:
         return Response({'err':'not signed in'}, status=403)
     has_new_message = ChatUser.objects.get(user = request.user).has_new_message
+    notifications = Notification.objects.filter(associated_user = request.user, is_seen = False)
+    for _ in notifications:
+        print(_)
+
     context = {}
+    context['notification_count'] = len(notifications)
     context['has_new_message'] = has_new_message 
     return Response(context, status=200)
 

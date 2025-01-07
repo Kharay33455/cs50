@@ -14,6 +14,7 @@ class Person(models.Model):
     # user last known location. Can be null. Needs to be provided to find communities near user
     long = models.FloatField( blank=True, null=True)
     lat = models.FloatField(max_length=10, blank=True, null=True)
+    # track if users has seen their new notifications
     #return username to allow identification in admin panel and print statements
     def __str__(self):
         return self.user.username
@@ -101,6 +102,7 @@ class Notification(models.Model):
     # owner of post
     associated_user = models.ForeignKey(User, on_delete=models.CASCADE)
     id_item = models.IntegerField(blank = True, null= True)
+    is_seen = models.BooleanField(default=False)
 
     def __str__(self):
         return f'{self.type} notification object for {self.person}'
