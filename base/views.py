@@ -544,7 +544,7 @@ def community(request):
 def get_post_by_community(request):
     context = {}
     # get community id from request object and get community
-    community_id = request.GET.get('id')
+    community_id = int( request.GET.get('id'))
     _community = Community.objects.get(id = community_id)
 
     # get data on user
@@ -606,7 +606,8 @@ def get_post_by_community(request):
     # pass user id of current user
     context['user_id'] = request.user.id
     # check if user is mod of community
-
+    # return community ID. USers on the front would need this to exit the community
+    context['community_details']['community_id'] = community_id
     return Response(context, status=200)
 
 
