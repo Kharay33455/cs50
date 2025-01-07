@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from django.views.decorators.csrf import csrf_exempt
 from django.middleware.csrf import get_token
 
+
 # Create your views here.
 def get_today():
     today = datetime.today()
@@ -346,3 +347,67 @@ def delete_chat(request):
         return Response(status = 204)
     except Chat.DoesNotExist:
         return Response(status=204)
+    
+# get all comms related to user
+@api_view(['GET'])
+def community_chats(request):
+    _person = Person.objects.get(user = request.user)
+    _pc = PersonCommunity.objects.filter(person = _person)
+    context = {}
+    comm_list = []
+    for _ in _pc:
+        comm_list.append({'community_name' : _.community.name, 'community_is_private' : _.community.is_private, 'community_id' : _.community.id})
+    context['comm_list'] = comm_list
+    import time
+    return Response(context, status=200)
+
+# all chat messages
+@api_view(['GET', 'POST'])
+def get_messages_for_community(request):
+    _comm_id = int(request.GET.get('commId'))
+    _community = Community.objects.get(id = _comm_id)
+    # requesting user
+    _person = Person.objects.get(user = request.user)
+    # make sure they're part of the community they're requesting messages for
+    try:
+        _pc = PersonCommunity.objects.get(person = _person, community = _community)
+    except PersonCommunity.DoesNotExist:
+        context = {'err':'You\'re not a member of this community'}
+        return Response(context, status=403)
+    _chat_user_obj = ChatUser.objects.get(user =  request.user)
+    # if post, make new message
+    if request.method == 'POST':
+        text = str(request.data['text']).strip()
+        
+        CommunityMessage.objects.create(message = text, sender = _chat_user_obj, community = _community)
+
+    """Get all messages belonging to that community"""
+    message_list = []
+    messages = CommunityMessage.objects.filter(community = _community)
+    context = {}
+    context ['last_id'] = 0
+    for _ in messages:
+        __ = CommunityMessageSerializer(_)
+        _chat_user = _.sender
+        _sender = Person.objects.get(user = _chat_user.user)
+        ___ = __.data
+        # check if user is message sender
+        if _.sender == _chat_user_obj:
+            ___['same'] = True
+        else:
+            ___['same'] = False
+        if _sender.pfp:
+            ___['sender_pfp'] = add_base( request, '/media/' + str(_sender.pfp))
+        else:
+            ___['sender_pfp'] = "None"
+        ___['sender'] =_sender.display_name
+        ___['time_sent'] = _.created.strftime("%H %M")
+        context['last_id'] = _.id
+
+        
+        message_list.append(___)
+    context['msg_list'] = message_list
+    context['csrf'] = get_token(request)
+    context['community_details'] = {'community_name' : _community.name}
+
+    return Response(context, status=200)

@@ -9,3 +9,8 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = "__all__"
+
+class CommunityMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CommunityMessage
+        fields = "__all__"

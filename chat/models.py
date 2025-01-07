@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from base.models import Community
 
 # Create your models here.
 
@@ -38,3 +39,15 @@ class Message(models.Model):
 
     def __str__(self):
         return f'Message from {self.user} at {self.created} to {self.chat}'
+
+# a single community message object
+class CommunityMessage(models.Model):
+    message = models.TextField() # the text if any of the message sent to the community
+    sender = models.ForeignKey(ChatUser, on_delete=models.SET_NULL, blank=True, null=True) # set message sender name to null if user delete's their account
+    created = models.DateTimeField(auto_now_add=True) # when message was sent
+    media = models.ImageField(upload_to='chat/commChat', blank=True, null=True) # image. Can be blank.
+    community = models.ForeignKey(Community, on_delete=models.CASCADE) # if community is deleted, delete all messages associated with community
+
+
+    def __str__(self):
+        return f'Message from {self.sender} to {self.community.name}'

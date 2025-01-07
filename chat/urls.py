@@ -12,5 +12,7 @@ urlpatterns = [
     path('new-post', views.new_post, name='new-post'),
     path('new-message', views.new_chat, name='new_message'),
     path('delete-chat', views.delete_chat, name='delete_chat'),
+    path('community-chat', views.community_chats, name='comm-chats'),
+    path('comm-messages', views.get_messages_for_community, name='chat-messages'),
 ] 
 urlpatterns += static(settings.MEDIA_URL, document_root = settings.MEDIA_ROOT)
