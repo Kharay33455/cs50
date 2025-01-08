@@ -348,17 +348,17 @@ def delete_chat(request):
     except Chat.DoesNotExist:
         return Response(status=204)
     
+
 # get all comms related to user
 @api_view(['GET'])
 def community_chats(request):
-    _person = Person.objects.get(user = request.user)
-    _pc = PersonCommunity.objects.filter(person = _person)
+    _person = Person.objects.get(user = request.user) # person making request
+    _pc = PersonCommunity.objects.filter(person = _person) # object to get all user's communities
     context = {}
     comm_list = []
     for _ in _pc:
         comm_list.append({'community_name' : _.community.name, 'community_is_private' : _.community.is_private, 'community_id' : _.community.id})
     context['comm_list'] = comm_list
-    import time
     return Response(context, status=200)
 
 # all chat messages
@@ -375,17 +375,24 @@ def get_messages_for_community(request):
         context = {'err':'You\'re not a member of this community'}
         return Response(context, status=403)
     _chat_user_obj = ChatUser.objects.get(user =  request.user)
-    # if post, make new message
+    # if method is post, make new message
     if request.method == 'POST':
         text = str(request.data['text']).strip()
-        
-        CommunityMessage.objects.create(message = text, sender = _chat_user_obj, community = _community)
+        image = None
+        print(request.FILES.get('image'))
+        if request.FILES.get('image'):
+            image = request.FILES.get('image')
+        if text == "":
+            text = None
+        # only create message if it's valid
+        if text != None or image != None:
+            print('Saving')
+            CommunityMessage.objects.create(message = text, sender = _chat_user_obj, community = _community, media = image)
 
     """Get all messages belonging to that community"""
     message_list = []
     messages = CommunityMessage.objects.filter(community = _community)
     context = {}
-    context ['last_id'] = 0
     for _ in messages:
         __ = CommunityMessageSerializer(_)
         _chat_user = _.sender
@@ -396,13 +403,18 @@ def get_messages_for_community(request):
             ___['same'] = True
         else:
             ___['same'] = False
+        # append user profile picture if any
         if _sender.pfp:
             ___['sender_pfp'] = add_base( request, '/media/' + str(_sender.pfp))
         else:
             ___['sender_pfp'] = "None"
+        # sender display name
         ___['sender'] =_sender.display_name
-        ___['time_sent'] = _.created.strftime("%H %M")
-        context['last_id'] = _.id
+        # time frmatted to hour and minute
+        ___['time_sent'] = process_time(_.created)
+        # append message media if available
+        if _.media:
+            ___['media'] = add_base(request, str(___['media']))
 
         
         message_list.append(___)

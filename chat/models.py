@@ -42,7 +42,7 @@ class Message(models.Model):
 
 # a single community message object
 class CommunityMessage(models.Model):
-    message = models.TextField() # the text if any of the message sent to the community
+    message = models.TextField(null=True,blank=True) # the text if any of the message sent to the community
     sender = models.ForeignKey(ChatUser, on_delete=models.SET_NULL, blank=True, null=True) # set message sender name to null if user delete's their account
     created = models.DateTimeField(auto_now_add=True) # when message was sent
     media = models.ImageField(upload_to='chat/commChat', blank=True, null=True) # image. Can be blank.
