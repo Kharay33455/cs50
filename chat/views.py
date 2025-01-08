@@ -352,10 +352,29 @@ def delete_chat(request):
 def community_chats(request):
     _person = Person.objects.get(user = request.user) # person making request
     _pc = PersonCommunity.objects.filter(person = _person) # object to get all user's communities
+
     context = {}
     comm_list = []
     for _ in _pc:
-        comm_list.append({'community_name' : _.community.name, 'community_is_private' : _.community.is_private, 'community_id' : _.community.id})
+        # get community last text
+        community = _.community
+        if community.pfp:
+            comm_pfp = add_base(request, '/media/' + str(community.pfp))
+        else:
+            comm_pfp = None
+        # get last message
+        print(comm_pfp)
+        _message = CommunityMessage.objects.filter(community = community).last()
+        if _message:
+            if _message.message:
+                _message = str(_message.message)
+                if len(_message) > 100:
+                    _message = _message[0:100] + '...'
+            else:
+                _message = 'Photo'
+        else:
+            _message = 'Silent Night'
+        comm_list.append({ 'community_pfp' : comm_pfp ,'community_name' : _.community.name, 'community_is_private' : _.community.is_private, 'community_id' : _.community.id, 'community_last_text' : _message})
     context['comm_list'] = comm_list
     return Response(context, status=200)
 

@@ -28,6 +28,7 @@ class Community(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now_add=True)
     description = models.TextField(blank=True, null=True)
+    pfp = models.ImageField(upload_to='community_pfp/', blank= True, null= True)
 
     def __str__(self):
         return f'{self.name} by {self.creator}'

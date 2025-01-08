@@ -459,6 +459,10 @@ def serialize(request, comm_obj_list):
         _comm_obj_list_['name'] = community_dets.name
         _comm_obj_list_['is_private'] = community_dets.is_private
         _comm_obj_list_['member_count'] = len(PersonCommunity.objects.filter(community = community_dets))
+        if community_dets.pfp:
+            _comm_obj_list_['pfp'] = add_base(request, '/media/'+ str(community_dets.pfp))
+        else:
+            _comm_obj_list_['pfp'] = None
         # check if user requesting community page has sent a join request to this commuity that remains unaprroed.
         # This is to alert the front end of the request and prevent theem from sending another
         try:
@@ -596,8 +600,13 @@ def get_post_by_community(request):
     _com_dets['community_is_private'] = _community.is_private
     _com_dets['community_name'] = _community.name
     _com_dets['community_description'] = _community.description
+    if _community.pfp:
+        comm_pfp = add_base(request, '/media/' + str(_community.pfp))
+    else:
+        comm_pfp = None
 
     context['community_details'] = _com_dets
+    context['community_details']['community_pfp'] = comm_pfp
     # append user pfp is they have one
     if _person_['pfp']:
         context['user_pfp'] = add_base(request, _person_['pfp'])
@@ -609,6 +618,7 @@ def get_post_by_community(request):
     # check if user is mod of community
     # return community ID. USers on the front would need this to exit the community
     context['community_details']['community_id'] = community_id
+    context['csrf'] = get_token(request)
     return Response(context, status=200)
 
 
@@ -897,3 +907,45 @@ def exit_commuity(request):
     except Exception as e:
         Error.objects.create(error = e)
     return Response(status=200)
+
+
+# edit community details
+@api_view(['POST'])
+def change_community_details(request):
+    name = str(request.data.get('name')).strip()
+    description = str(request.data.get('description')).strip()
+    privacy = str(request.data.get('isPrivate')).strip()
+    if privacy == 'false':
+        privacy = False
+    else:
+        privacy = True
+    id = int(request.data.get('communityId'))
+    try:
+        image = request.FILES.get('pfp')
+    except Exception as e:
+        print(e)
+    """ validate the person editing this community is a mod"""
+    # get person object for user
+    _person = Person.objects.get(user = request.user)
+    # get community object if it exists
+    try:
+
+        _community = Community.objects.get(id = id)
+    except Community.DoesNotExist:
+        return Response(status=403)
+    # check user belongs to this community and is mod
+    try:
+
+        _pc = PersonCommunity.objects.get(person = _person, community = _community)
+    except PersonCommunity.DoesNotExist:
+        return Response({'err':"You're not a member of this community"}, status=403)
+    if _pc.isMod:
+        _community.name = name
+        _community.is_private = privacy
+        _community.pfp = image
+        _community.description = description
+        _community.save()
+        # alert front end of success
+        return Response({'msg':f'{_community.name} has been updated succesfully.'}, status=200)
+    else:
+        return Response({'err':"You dont have permission to do this"}, status=403)
