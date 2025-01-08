@@ -6,8 +6,7 @@ from .models import *
 from base.models import Person, Community, PersonCommunity, Post
 from base.serializers import PersonSerializer
 from base.views import add_base
-from datetime import datetime, timedelta
-from django.views.decorators.csrf import csrf_exempt
+from datetime import datetime
 from django.middleware.csrf import get_token
 
 
