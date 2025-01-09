@@ -23,6 +23,7 @@ urlpatterns = [
     path('footer-details', views.footer_details, name="footer_dets"),
     path('exit-community', views.exit_commuity, name='exit_community'),
     path('change-community-details', views.change_community_details, name='change_comm_dets'),
+    path('edit-mod', views.edit_mod, name='edit_mod'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

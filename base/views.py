@@ -203,8 +203,6 @@ def base(request):
 # testing static config
 def bases(request):
 
-    posts = Post.objects.filter(isPrivate = False)
-    print(len(posts))
     return render(request, 'base/index.html')
 
 # check bad data in username. ONly accepts alphanumric values
@@ -753,6 +751,23 @@ def community_request(request):
         _join_list.append(___)
     context = {}
     context['join_requests'] = _join_list
+    # get all members
+    __pc = PersonCommunity.objects.filter(community = community_obj)
+    members = []
+    mods = []
+    for _ in __pc:
+        
+        _person = _.person
+        _temp = PersonSerializer(_person)
+        temp = _temp.data
+        temp['isMod'] = _.isMod
+        if _.isMod:
+            mods.append(_person.id)
+        if _person.pfp:
+            temp['pfp'] = add_base(request, temp['pfp'])
+        members.append(temp)
+    context['members'] = members
+    context['mods'] = mods
     return Response(context, status= 200)
 
 # register new users
@@ -902,8 +917,12 @@ def exit_commuity(request):
     # get person, commuity ad use it to get the perosn community object. if succesful, delete.
     _ = int(request.GET.get('communityId'))
     comm = Community.objects.get(id = _)
+    _person = Person.objects.get(user = request.user)
     try:
-        PersonCommunity.objects.get(person = Person.objects.get(user = request.user), community = comm).delete()
+        if _person == comm.creator:
+            return Response({'err':'You cannot exit your own community.'}, status=403)
+        
+        PersonCommunity.objects.get(person = _person, community = comm).delete()
     except Exception as e:
         Error.objects.create(error = e)
     return Response(status=200)
@@ -939,6 +958,7 @@ def change_community_details(request):
         _pc = PersonCommunity.objects.get(person = _person, community = _community)
     except PersonCommunity.DoesNotExist:
         return Response({'err':"You're not a member of this community"}, status=403)
+    # if user is a mod, make changes
     if _pc.isMod:
         _community.name = name
         _community.is_private = privacy
@@ -949,3 +969,36 @@ def change_community_details(request):
         return Response({'msg':f'{_community.name} has been updated succesfully.'}, status=200)
     else:
         return Response({'err':"You dont have permission to do this"}, status=403)
+
+"""Add and remove mods"""
+@api_view(['GET'])
+def edit_mod(request):
+    # get person and comunity to edit, check if person is mod of community
+    person_id =int(request.GET.get('personId'))
+    community_id = int(request.GET.get('communityId'))
+    _person = Person.objects.get(id = person_id)
+    _community = Community.objects.get(id = community_id)
+    try:
+        _pc = PersonCommunity.objects.get(person = _person, community = _community)
+    except PersonCommunity.DoesNotExist:
+        return Response({'err':'Not a member'}, status=403)
+    # get all mods and acounts
+    _mods = PersonCommunity.objects.filter(community = _community, isMod = True)
+    mods = len(_mods)
+    # if they are mod and there's an extra mod to keep running community, revoke
+    if _pc.isMod:
+        if mods > 1:
+            if _community.creator != _pc.person:
+                _pc.isMod = False
+            else:
+                return Response({'err':f'Sorry {request.user}, you are the creator of this community so you cannot remove yourself from moderators.'}, status=403)
+        else:
+            return Response({'err':'You can\'t delete all mods. Communities need at least one active mod to run them.'}, status=403)
+    else:
+        if mods < 10:
+            _pc.isMod = True
+        else:
+            return Response({'err':'Community cannnot have more than 10 mods,'}, status= 403)
+        
+    _pc.save()
+    return Response(status=200)
