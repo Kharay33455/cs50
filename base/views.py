@@ -985,11 +985,15 @@ def edit_mod(request):
     # get all mods and acounts
     _mods = PersonCommunity.objects.filter(community = _community, isMod = True)
     mods = len(_mods)
+    # person ovject of user
+    _mod_person = Person.objects.get(user = request.user)
     # if they are mod and there's an extra mod to keep running community, revoke
     if _pc.isMod:
         if mods > 1:
             if _community.creator != _pc.person:
                 _pc.isMod = False
+                # notify user they are no longer mod
+                new_notif = Notification.objects.create(type='not_mod', message = f'revoked your moderator status at {_community.name}.', person = _mod_person, associated_user = _person.user)
             else:
                 return Response({'err':f'Sorry {request.user}, you are the creator of this community so you cannot remove yourself from moderators.'}, status=403)
         else:
@@ -997,8 +1001,10 @@ def edit_mod(request):
     else:
         if mods < 10:
             _pc.isMod = True
+            new_notif = Notification.objects.create(type='is_mod', message = f'made you a moderator at {_community.name}.', person = _mod_person, associated_user = _person.user)
         else:
             return Response({'err':'Community cannnot have more than 10 mods,'}, status= 403)
         
     _pc.save()
+    new_notif.save()
     return Response(status=200)
