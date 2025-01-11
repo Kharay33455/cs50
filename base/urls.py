@@ -24,6 +24,7 @@ urlpatterns = [
     path('exit-community', views.exit_commuity, name='exit_community'),
     path('change-community-details', views.change_community_details, name='change_comm_dets'),
     path('edit-mod', views.edit_mod, name='edit_mod'),
+    path('ban-user', views.ban_from_community, name='ban'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

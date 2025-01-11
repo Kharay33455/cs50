@@ -124,3 +124,11 @@ class Error(models.Model):
 
     def __str__(self):
         return f'{self.error} on {self.date}'
+
+class Ban(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    community = models.ForeignKey(Community, on_delete= models.CASCADE)
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username} ban from {self.community.name}'

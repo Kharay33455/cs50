@@ -690,6 +690,10 @@ def join_community(request):
     # get person requesting to join the community
     person = Person.objects.get(user = request.user)
 
+    bans = Ban.objects.filter(user = person.user, community = community_obj)
+    if bans:
+        return Response({'err':f'You are banned from {community_obj.name}.'}, status=403)
+
     # if commuinty is pricate, make a reqyest and wait for mod to accept
     if community_obj.is_private == True:
         JoinRequest.objects.get_or_create(user = request.user, community = community_obj)
@@ -995,7 +999,7 @@ def edit_mod(request):
                 # notify user they are no longer mod
                 new_notif = Notification.objects.create(type='not_mod', message = f'revoked your moderator status at {_community.name}.', person = _mod_person, associated_user = _person.user)
             else:
-                return Response({'err':f'Sorry {request.user}, you are the creator of this community so you cannot remove yourself from moderators.'}, status=403)
+                return Response({'err':f'You cannot remove {str(_community.creator).upper()} from {_community.name} as they are it\'s founder.'}, status=403)
         else:
             return Response({'err':'You can\'t delete all mods. Communities need at least one active mod to run them.'}, status=403)
     else:
@@ -1007,4 +1011,38 @@ def edit_mod(request):
         
     _pc.save()
     new_notif.save()
+    return Response(status=200)
+
+"""Ban user from community
+Fucntion that takes in a user and community and bans the user from the community permanently.
+It creates a Banned object in memory that stores community details and user details and deletes the personcommunity object
+that links said user to community..
+WHen user tries to rejoin, join function checks for ban objects. Since it exists, It rejects their join requests
+"""
+@api_view(['GET'])
+def ban_from_community(request):
+    print(request.GET)
+    # get person id from request object
+    _person_id = int(request.GET.get('userId'))
+    _comm_id = int(request.GET.get('commId'))
+    # confirm authentication
+    if not request.user.is_authenticated:
+        return Response({'err':'There\'s been an issue with your authentication. Log in again to reconfirm your identity.'}, status=403)
+    # get user
+    _person = Person.objects.get(id = _person_id)
+    # get community
+    _community = Community.objects.get(id = _comm_id)
+    # make sure the user being banned is not community creator
+    if _person == _community.creator:
+        return Response({'err':f'{str(_person.display_name).upper()} cannot be banned from {_community.name} as they are the founder.'},status=403)
+
+    """Remove and ban user"""
+    # ban user
+    ban_obj, created = Ban.objects.get_or_create(user = _person.user, community = _community)
+    _pcs = PersonCommunity.objects.filter(person = _person, community = _community)
+    for _ in _pcs:
+        _.delete()
+    ban_obj.save()
+    # alert user of their ban
+    Notification.objects.create(type='banned', message= f'You have been banned from {_community.name}', person = _person, associated_user = _person.user)
     return Response(status=200)
