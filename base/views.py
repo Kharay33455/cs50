@@ -770,8 +770,24 @@ def community_request(request):
         if _person.pfp:
             temp['pfp'] = add_base(request, temp['pfp'])
         members.append(temp)
+    # make a list of banned users
+    banned = []
+    bans = Ban.objects.filter(community = community_obj)
+    for _ in bans:
+        # get the person, serialize and append to the banned list
+        _banned_person = Person.objects.get(user = _.user)
+        banned_person_ = PersonSerializer(_banned_person)
+        banned_person = banned_person_.data
+        if _banned_person.pfp:
+            banned_person['pfp'] = add_base(request, banned_person['pfp'])
+        else:
+            banned_person['pfp']= None
+        banned.append(banned_person)
+    # add all data to context
     context['members'] = members
     context['mods'] = mods
+    context['banned'] = banned
+    # return context
     return Response(context, status= 200)
 
 # register new users
@@ -1045,4 +1061,37 @@ def ban_from_community(request):
     ban_obj.save()
     # alert user of their ban
     Notification.objects.create(type='banned', message= f'You have been banned from {_community.name}', person = _person, associated_user = _person.user)
+    return Response(status=200)
+
+"""
+Function to unban user
+This function takes in a community id and user id
+It first confirm authentication and permissions
+If all is well, recreate the person to community object and delete their ban object
+"""
+@api_view(['GET'])
+def lift_ban(request):
+    # extract parameters
+    comm_id = int(request.GET.get('communityId'))
+    person_id = int(request.GET.get('userId'))
+
+    # confirm authentication
+    if not request.user.is_authenticated:
+        return Response({'err':'Error, you need to log in'},status=403)
+    
+    # confirm user is a mod
+    _requesting_person = Person.objects.get(user = request.user)
+    _community = Community.objects.get(id = comm_id)
+    print(_requesting_person, _community)
+
+    _pc = PersonCommunity.objects.get(person = _requesting_person, community = _community )
+    print(_pc, _pc.isMod)
+    if not _pc.isMod:
+        return Response({'err':'You\'re not a moderator'}, status=403)
+    _person_to_unban = Person.objects.get(id = person_id)
+    _new_pc, created = PersonCommunity.objects.get_or_create(person = _person_to_unban , community = _community)
+    _ban_objs = Ban.objects.filter( user = _person_to_unban.user ,community = _community)
+    for _ in _ban_objs:
+        _.delete()
+    _new_pc.save()
     return Response(status=200)
