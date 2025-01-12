@@ -1096,3 +1096,23 @@ def lift_ban(request):
         _.delete()
     _new_pc.save()
     return Response(status=200)
+
+"""
+Returns profile picture to top for display 
+"""
+@api_view(['GET'])
+def get_pfp(request):
+    if not request.user.is_authenticated:
+        context = {'pfp': None}
+        return Response(context, status=200)
+    # get pfp for user
+    _person = Person.objects.get(user = request.user)
+    # return pfp if available else return none
+    if _person.pfp:
+        pfp = add_base(request, '/media/' + str(_person.pfp))
+    else:
+        pfp = None
+    context = {'pfp' : pfp}
+    print(context)
+
+    return Response(context , status=200)
