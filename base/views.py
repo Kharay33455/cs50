@@ -484,7 +484,6 @@ def community(request):
         # location of user. Gotten from expo 
         lat = request.GET.get('lat')
         long = request.GET.get('long')
-
          # value of range to search for new communities
         dist = request.GET.get('dist')
 
