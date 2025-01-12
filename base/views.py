@@ -1091,6 +1091,7 @@ def lift_ban(request):
     _person_to_unban = Person.objects.get(id = person_id)
     _new_pc, created = PersonCommunity.objects.get_or_create(person = _person_to_unban , community = _community)
     _ban_objs = Ban.objects.filter( user = _person_to_unban.user ,community = _community)
+    new_notif = Notification.objects.create(type='unban', message=f'lifted your ban at "{_community.name}".', person = _requesting_person, associated_user = _person_to_unban.user)
     for _ in _ban_objs:
         _.delete()
     _new_pc.save()
