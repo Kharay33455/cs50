@@ -18,13 +18,19 @@ def get_today():
 # process time
 def process_time(time, true_time = False):
     time = str(time)
-    get_today()
+    print(get_today())
+    
     date = time[:10]
+    print(date)
     time = time[11:16]
     if true_time == True:
         return time
     if date != get_today():
-        time = 'Yesterday'
+        if  int(get_today()[-2:]) -  int(date[-2:]) > 1:
+            time = date + ' '+ time
+        else:
+
+            time = 'Yesterday'
     return time
 
 # base api for chat section
@@ -56,7 +62,6 @@ def chat(request):
         # serialize chats
         def serialize_chat(chat):
             try:
-                print(chat)
                 # get all messages associated with the chat to find the last chat
                 _message = Message.objects.filter(chat = chat).order_by("-created").first()
                 # serialize chat
@@ -71,7 +76,7 @@ def chat(request):
                 else:
                     _chat_['is_read'] = chat.user_2_has_read
             except Exception as e:
-                print(e)
+                pass
 
             return _chat_
 
@@ -213,7 +218,6 @@ def send_message(request):
 # create a new post
 @api_view(['GET', 'POST'])
 def new_post(request):
-    print('here')
     # make sure user is signed in. If not, redirect to login
     if request.user.is_authenticated:
         # get person
@@ -340,7 +344,6 @@ def delete_chat(request):
         if request.user.id != chat.user_1 and request.user.id != chat.user_2:
             return Response(status= 400)
         # now delete chat and inform front end of success
-        print(chat)
         chat.delete()
         return Response(status = 204)
     except Chat.DoesNotExist:
@@ -352,7 +355,7 @@ def delete_chat(request):
 def community_chats(request):
     _person = Person.objects.get(user = request.user) # person making request
     _pc = PersonCommunity.objects.filter(person = _person) # object to get all user's communities
-
+    
     context = {}
     comm_list = []
     for _ in _pc:
@@ -363,9 +366,11 @@ def community_chats(request):
         else:
             comm_pfp = None
         # get last message
-        print(comm_pfp)
         _message = CommunityMessage.objects.filter(community = community).last()
         if _message:
+            _last_text_time = _message.created
+            _time = process_time(str( _message.created))
+
             if _message.message:
                 _message = str(_message.message)
                 if len(_message) > 100:
@@ -373,14 +378,19 @@ def community_chats(request):
             else:
                 _message = 'Photo'
         else:
+            _last_text_time = _.community.created
             _message = 'Silent Night'
-        comm_list.append({ 'community_pfp' : comm_pfp ,'community_name' : _.community.name, 'community_is_private' : _.community.is_private, 'community_id' : _.community.id, 'community_last_text' : _message})
+        comm_list.append({ 'community_pfp' : comm_pfp ,'community_name' : _.community.name, 'community_is_private' : _.community.is_private, 'community_id' : _.community.id, 'community_last_text' : _message, 'community_last_text_time' : _last_text_time, 'time': _time})
+    comm_list.sort(key=lambda x: x['community_last_text_time'], reverse=True)
+    
     context['comm_list'] = comm_list
+
     return Response(context, status=200)
 
 # all chat messages
 @api_view(['GET', 'POST'])
 def get_messages_for_community(request):
+
     _comm_id = int(request.GET.get('commId'))
     _community = Community.objects.get(id = _comm_id)
     # requesting user
@@ -396,14 +406,12 @@ def get_messages_for_community(request):
     if request.method == 'POST':
         text = str(request.data['text']).strip()
         image = None
-        print(request.FILES.get('image'))
         if request.FILES.get('image'):
             image = request.FILES.get('image')
         if text == "":
             text = None
         # only create message if it's valid
         if text != None or image != None:
-            print('Saving')
             CommunityMessage.objects.create(message = text, sender = _chat_user_obj, community = _community, media = image)
 
     """Get all messages belonging to that community"""

@@ -80,10 +80,7 @@ def get_all_from_person(request, person):
                 
             i += 1
         context['post'].append(_context)
-    print(context)
     context['post'] = sorted(context['post'], key = lambda x: x['posted'], reverse=True)
-    print('\n\n\n\n\n\n\n\n')
-    print(context)
     return context
     
 # function to return json about person.
@@ -922,9 +919,6 @@ def footer_details(request):
         return Response({'err':'not signed in'}, status=403)
     has_new_message = ChatUser.objects.get(user = request.user).has_new_message
     notifications = Notification.objects.filter(associated_user = request.user, is_seen = False)
-    for _ in notifications:
-        print(_)
-
     context = {}
     context['notification_count'] = len(notifications)
     context['has_new_message'] = has_new_message 
@@ -961,7 +955,7 @@ def change_community_details(request):
     try:
         image = request.FILES.get('pfp')
     except Exception as e:
-        print(e)
+        Error.objects.create(error = e)
     """ validate the person editing this community is a mod"""
     # get person object for user
     _person = Person.objects.get(user = request.user)
@@ -1036,7 +1030,6 @@ WHen user tries to rejoin, join function checks for ban objects. Since it exists
 """
 @api_view(['GET'])
 def ban_from_community(request):
-    print(request.GET)
     # get person id from request object
     _person_id = int(request.GET.get('userId'))
     _comm_id = int(request.GET.get('commId'))
@@ -1081,10 +1074,8 @@ def lift_ban(request):
     # confirm user is a mod
     _requesting_person = Person.objects.get(user = request.user)
     _community = Community.objects.get(id = comm_id)
-    print(_requesting_person, _community)
 
     _pc = PersonCommunity.objects.get(person = _requesting_person, community = _community )
-    print(_pc, _pc.isMod)
     if not _pc.isMod:
         return Response({'err':'You\'re not a moderator'}, status=403)
     _person_to_unban = Person.objects.get(id = person_id)
@@ -1112,6 +1103,5 @@ def get_pfp(request):
     else:
         pfp = None
     context = {'pfp' : pfp}
-    print(context)
 
     return Response(context , status=200)
