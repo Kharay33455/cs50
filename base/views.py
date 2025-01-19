@@ -1127,8 +1127,32 @@ def get_pfp(request):
 
     return Response(context , status=200)
 
+# get relationship and change
+def sort_relationship(request, person_obj):
+    relationship, created = Relationship.objects.get_or_create(user = request.user, person = person_obj) # get relationahip
+    if relationship.relationship == "ST":
+        relationship.relationship = "FO"
+        # if now following
+        person_obj.fans +=1
+        person_obj.stalkers -= 1
+    else:
+        relationship.relationship = "ST"
+        person_obj.fans -= 1
+        person_obj.stalkers += 1
+    # save all models
+    relationship.save()
+    person_obj.save()
+    return relationship.relationship
+
 @api_view(['POST'])
 def get_relationship(request):
     user_id = int(request.data['userId'])
-    print(user_id)
-    return Response({}, status=200)
+    _person = Person.objects.get(user = User.objects.get(id = user_id))
+    new_relationship = sort_relationship(request, _person) # function to sort relationship
+    # return new info
+    context = {}
+    context['relationship'] = new_relationship
+    context['fans'] = _person.fans
+    context['stalkers'] = _person.stalkers
+    context['obsessions'] = _person.obsessions
+    return Response(context, status=200)
