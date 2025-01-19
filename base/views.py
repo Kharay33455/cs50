@@ -83,18 +83,37 @@ def get_all_from_person(request, person):
     context['post'] = sorted(context['post'], key = lambda x: x['posted'], reverse=True)
     return context
     
+
+# count user stats
+def count_user_stats(person_obj):
+    new_fan_count = len(Relationship.objects.filter(person = person_obj, relationship = "FO"))
+    person_obj.fans = new_fan_count
+    new_stalker_count = len(Relationship.objects.filter(person = person_obj, relationship = "ST"))
+    person_obj.stalkers = new_stalker_count
+    new_obsession_count = len(Relationship.objects.filter(user = person_obj.user, relationship = "FO"))
+    person_obj.obsessions = new_obsession_count
+    # save models 
+    person_obj.save()
+
+    return True
+
+    
+
 # function to return json about person.
 @api_view(['GET'])
 def get_person(request):
     if request.user.is_authenticated:
         # check if user is requesting their profile or another user's profile
         if request.GET.get('userId'):
-            user = User.objects.get(id = str(request.GET.get('userId')))
+            user = User.objects.get(id = int(request.GET.get('userId')))
             if user == request.user:
                 return Response({'msg':'Same user'}, status=302)
             _person = Person.objects.get(user = user)
         else:
+            # user is at their own page
             _person = Person.objects.get(user= request.user)
+            # when user visits their own page
+        count_user_stats(_person)
         # return dictionary. Context is None if no matching posts exists, return an empty dictionary instead
         context = get_all_from_person(request=request, person=_person)
         if context == None:
@@ -109,21 +128,22 @@ def get_person(request):
             This is set to fan if they decide to publicly follow user
             That way, we can track who viewed whose profile
         """
-        # append relationahip to return object 
-        try:
-            relationship= Relationship.objects.get(user = request.user, person = _person)
-        except Relationship.DoesNotExist:
-            relationship = Relationship.objects.create(user = request.user, person = _person)
-            _person.stalkers +=1 # increase lurkers if they are not already following this user or watching them silently.
+        # append relationahip to return object if they're not on their own page
+        if request.user != _person.user:
             try:
-                context['stalkers'] = int(context['stalkers']) + 1
-            except Exception as e:
-                Error.objects.create(error = e)
-        context['relationship'] = relationship.relationship 
-        relationship.freq += 1       
+                relationship= Relationship.objects.get(user = request.user, person = _person)
+            except Relationship.DoesNotExist:
+                relationship = Relationship.objects.create(user = request.user, person = _person)
+                _person.stalkers +=1 # increase lurkers if they are not already following this user or watching them silently.
+                try:
+                    context['stalkers'] = int(context['stalkers']) + 1
+                except Exception as e:
+                    Error.objects.create(error = e)
+            context['relationship'] = relationship.relationship 
+            relationship.freq += 1 
+            relationship.save()      
         #save all changes to model if any
         _person.save()
-        relationship.save()
         return Response(context, status=200)
     else:
         # If user isnt signed in, redirect them to login
@@ -1129,6 +1149,7 @@ def get_pfp(request):
 
 # get relationship and change
 def sort_relationship(request, person_obj):
+
     relationship, created = Relationship.objects.get_or_create(user = request.user, person = person_obj) # get relationahip
     if relationship.relationship == "ST":
         relationship.relationship = "FO"
@@ -1142,20 +1163,15 @@ def sort_relationship(request, person_obj):
 def get_relationship(request):
     user_id = int(request.data['userId'])
     _person = Person.objects.get(user = User.objects.get(id = user_id))
-    new_relationship = sort_relationship(request, _person) # function to sort relationship
+    # if they're not viewing their own page
+    if request.user != _person.user:
+        new_relationship = sort_relationship(request, _person) # function to sort relationship
     # update stats
-    new_fan_count = len(Relationship.objects.filter(person = _person, relationship = "FO"))
-    _person.fans = new_fan_count
-    new_stalker_count = len(Relationship.objects.filter(person = _person, relationship = "ST"))
-    _person.stalkers = new_stalker_count
-    new_obsession_count = len(Relationship.objects.filter(user = _person.user, relationship = "FO"))
-    _person.obsessions = new_obsession_count
-    # save models 
-    _person.save()
-    # return new info
+    count_user_stats(_person)
+    # return info
     context = {}
     context['relationship'] = new_relationship
-    context['fans'] = new_fan_count
-    context['stalkers'] = new_stalker_count
-    context['obsessions'] = new_obsession_count
+    context['fans'] = _person.fans
+    context['stalkers'] = _person.stalkers
+    context['obsessions'] = _person.obsessions
     return Response(context, status=200)
