@@ -103,6 +103,27 @@ def get_person(request):
         context['csrf'] = get_token(request) 
         # user id to help track user to post id relationship on frontend   
         context['request_id'] = request.user.id
+        """
+            Append relationhsip between requesting uswer and user they are requesting
+            In the event they are not already related, created a relationship object and set to stalker.
+            This is set to fan if they decide to publicly follow user
+            That way, we can track who viewed whose profile
+        """
+        # append relationahip to return object 
+        try:
+            relationship= Relationship.objects.get(user = request.user, person = _person)
+        except Relationship.DoesNotExist:
+            relationship = Relationship.objects.create(user = request.user, person = _person)
+            _person.stalkers +=1 # increase lurkers if they are not already following this user or watching them silently.
+            try:
+                context['stalkers'] = int(context['stalkers']) + 1
+            except Exception as e:
+                Error.objects.create(error = e)
+        context['relationship'] = relationship.relationship 
+        relationship.freq += 1       
+        #save all changes to model if any
+        _person.save()
+        relationship.save()
         return Response(context, status=200)
     else:
         # If user isnt signed in, redirect them to login
@@ -1105,3 +1126,9 @@ def get_pfp(request):
     context = {'pfp' : pfp}
 
     return Response(context , status=200)
+
+@api_view(['POST'])
+def get_relationship(request):
+    user_id = int(request.data['userId'])
+    print(user_id)
+    return Response({}, status=200)

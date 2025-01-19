@@ -14,10 +14,25 @@ class Person(models.Model):
     # user last known location. Can be null. Needs to be provided to find communities near user
     long = models.FloatField( blank=True, null=True)
     lat = models.FloatField(max_length=10, blank=True, null=True)
-    # track if users has seen their new notifications
+    fans = models.BigIntegerField(default=0) # followers
+    obsessions = models.BigIntegerField(default=0) # obsessions
+    stalkers = models.BigIntegerField(default=0) # stalkers
     #return username to allow identification in admin panel and print statements
     def __str__(self):
         return self.user.username
+    
+RELATIONSHIP_STATUS = [
+    ('FO', 'Fan'),
+    ('ST', 'Stalk'),
+]
+    
+class Relationship(models.Model):
+    user =  models.ForeignKey(User, on_delete=models.CASCADE) # person relationship
+    person = models.ForeignKey(Person, on_delete=models.CASCADE) # person the relationship is being established with
+    relationship = models.CharField(max_length=5, choices= RELATIONSHIP_STATUS, default='ST') # following publicky or being shy about it?
+    freq = models.IntegerField(default=0) # how often they have visited this user's profile
+    def __str__(self):
+        return f'{self.user.username} link to {self.person.display_name}'
 
 
 # class to store community details

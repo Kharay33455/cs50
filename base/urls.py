@@ -27,6 +27,7 @@ urlpatterns = [
     path('ban-user', views.ban_from_community, name='ban'),
     path('lift-ban', views.lift_ban, name='lift-ban'),
     path('get-pfp', views.get_pfp, name='get-pfp'),
+    path('get-relationship', views.get_relationship, name='get-relationship'),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
