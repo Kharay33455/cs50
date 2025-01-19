@@ -1132,16 +1132,10 @@ def sort_relationship(request, person_obj):
     relationship, created = Relationship.objects.get_or_create(user = request.user, person = person_obj) # get relationahip
     if relationship.relationship == "ST":
         relationship.relationship = "FO"
-        # if now following
-        person_obj.fans +=1
-        person_obj.stalkers -= 1
     else:
         relationship.relationship = "ST"
-        person_obj.fans -= 1
-        person_obj.stalkers += 1
     # save all models
     relationship.save()
-    person_obj.save()
     return relationship.relationship
 
 @api_view(['POST'])
@@ -1149,10 +1143,19 @@ def get_relationship(request):
     user_id = int(request.data['userId'])
     _person = Person.objects.get(user = User.objects.get(id = user_id))
     new_relationship = sort_relationship(request, _person) # function to sort relationship
+    # update stats
+    new_fan_count = len(Relationship.objects.filter(person = _person, relationship = "FO"))
+    _person.fans = new_fan_count
+    new_stalker_count = len(Relationship.objects.filter(person = _person, relationship = "ST"))
+    _person.stalkers = new_stalker_count
+    new_obsession_count = len(Relationship.objects.filter(user = _person.user, relationship = "FO"))
+    _person.obsessions = new_obsession_count
+    # save models 
+    _person.save()
     # return new info
     context = {}
     context['relationship'] = new_relationship
-    context['fans'] = _person.fans
-    context['stalkers'] = _person.stalkers
-    context['obsessions'] = _person.obsessions
+    context['fans'] = new_fan_count
+    context['stalkers'] = new_stalker_count
+    context['obsessions'] = new_obsession_count
     return Response(context, status=200)
