@@ -28,7 +28,7 @@ class ChatUser(models.Model):
 
 # a single message
 class Message(models.Model):
-    message = models.TextField() # the text if any.. Can be emptyh string
+    message = models.TextField(blank=True, null= True) # the text if any.. Can be emptyh string
     chat = models.ForeignKey(Chat, on_delete=models.CASCADE) # associated chat
     user = models.ForeignKey(ChatUser, on_delete =models.CASCADE) # message sender
     created = models.DateTimeField(auto_now_add=True) # when message was created

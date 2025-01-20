@@ -127,7 +127,7 @@ def _serialize_message(message, request = None, base = None, user = None):
     # check for media, if one is avaiable, run add_base() to add the host to url
     if message.media:
         if base:
-            _message_['media'] = base + '/media/' + _message_['media']
+            _message_['media'] = base + _message_['media']
             print(_message_)
         if request:
             _message_['media'] = add_base(request, _message_['media'])
