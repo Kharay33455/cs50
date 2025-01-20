@@ -108,6 +108,33 @@ def chat(request):
     else:
         return Response({'err':'Sign in to see your messages'},status=301)
 
+# serialize message and append extra data
+def _serialize_message(message, request = None, base = None, user = None):
+# serialize message
+    _message = MessageSerializer(message)
+    _message_ = _message.data
+    # filter message from and message to
+    if user:
+        _user = user
+    else:
+        _user = request.user
+    if message.user.user == _user:
+        _message_['from'] = False
+    else:
+        _message_['from'] = True
+    
+         
+    # check for media, if one is avaiable, run add_base() to add the host to url
+    if message.media:
+        if base:
+            _message_['media'] = base + '/media/' + _message_['media']
+            print(_message_)
+        if request:
+            _message_['media'] = add_base(request, _message_['media'])
+    # get the tine created for the mesage
+    _message_['time'] = process_time(_message_['created'], true_time=True)
+    return _message_
+
 # message_s function to prepare chat for front end
 def message_s(request, messages):
     # dictionaty to store results
@@ -115,20 +142,7 @@ def message_s(request, messages):
     message_list = []
     # loop through al message objects in the query set
     for m in messages:
-        # serialize message
-        _message = MessageSerializer(m)
-        _message_ = _message.data
-        # filter message from and message to
-        if m.user.user == request.user:
-            _message_['from'] = False
-        else:
-            _message_['from'] = True
-        # check for media, if one is avaiable, run add_base() to add the host to url
-        if m.media:
-            _message_['media'] = add_base(request, _message_['media'])
-        # get the tine created for the mesage
-        _message_['time'] = process_time(_message_['created'], true_time=True)
-        message_list.append(_message_)
+        message_list.append(_serialize_message(request = request , message = m))
     context['messages'] = message_list
     # get csrf to send new messages securely
     context['csrf'] = get_token(request)
@@ -152,7 +166,7 @@ def get_all_messages(chat_id, user_id):
     chat.save()
     _dict = {}
     # get all messages associated with the chat and return json
-    messages = Message.objects.filter(chat = chat)
+    messages = Message.objects.filter(chat = chat).order_by('-created')
     _dict['messages'] = messages
     _dict['other_user_id'] = other_user_id
     return _dict
@@ -160,9 +174,9 @@ def get_all_messages(chat_id, user_id):
 
 # show chats 
 @api_view(['GET'])
-def show_chat(request):
+def show_chat(request, chat_id):
     # get chat ID from request object and use it to get the chat object
-    chat_id = request.GET.get('id')
+    chat_id = int(chat_id)
     # get all messages for this chat id and store in query set
     messages = get_all_messages(chat_id=chat_id ,user_id=request.user.id)
     # run the message_s() function. It takes messages and request and returns 

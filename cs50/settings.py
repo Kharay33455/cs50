@@ -35,6 +35,8 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
+    'daphne',
     'corsheaders',
     'chat',
     'base',
@@ -81,9 +83,14 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'cs50.wsgi.application'
+#WSGI_APPLICATION = 'cs50.wsgi.application'
 ASGI_APPLICATION = 'cs50.asgi.application'
 
+CHANNEL_LAYERS = {
+    'default':{
+        'BACKEND' : 'channels.layers.InMemoryChannelLayer'
+    }
+}
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
