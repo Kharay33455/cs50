@@ -113,3 +113,24 @@ class ChatConsumer(WebsocketConsumer):
             'type':'new_message',
             'message' : message
         }))
+
+
+class ChatListConsumer(WebsocketConsumer):
+    def connect(self):
+        print('here')
+        user = self.scope['user']
+        print(user)
+
+        self.accept();
+        self.send(text_data=json.dumps({
+            'type' : 'connected',
+            'message':'You have been connected'
+        }));
+
+    def receive(self, text_data):
+        data =  json.loads(text_data)
+        print(data)
+        self.send(text_data=json.dumps({
+            'type' : 'response',
+            'message' : 'HI client.'
+        }))
