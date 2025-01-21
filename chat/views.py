@@ -17,11 +17,8 @@ def get_today():
 
 # process time
 def process_time(time, true_time = False):
-    time = str(time)
-    print(get_today())
-    
+    time = str(time)    
     date = time[:10]
-    print(date)
     time = time[11:16]
     if true_time == True:
         return time
@@ -128,7 +125,6 @@ def _serialize_message(message, request = None, base = None, user = None):
     if message.media:
         if base:
             _message_['media'] = base + _message_['media']
-            print(_message_)
         if request:
             _message_['media'] = add_base(request, _message_['media'])
     # get the tine created for the mesage

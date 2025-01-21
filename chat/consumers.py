@@ -1,7 +1,7 @@
 # major imports
 import json # to load and sump json
-from channels.generic.websocket import WebsocketConsumer # web consumer object to inherit classes from
-from asgiref.sync import async_to_sync # make asynt 
+from channels.generic.websocket import WebsocketConsumer, AsyncWebsocketConsumer # web consumer object to inherit classes from
+from asgiref.sync import async_to_sync, sync_to_async # make asynt 
 # customs
 from .models import *
 from .serializer import *
@@ -12,33 +12,39 @@ import base64
 from django.core.files.base import ContentFile
 # random module to generate names at random
 import random
+#import channel layer
+from channels.layers import get_channel_layer
+from channels.db import database_sync_to_async
+from django.db.models import Q
 
 # chat consummer for web socket
-class ChatConsumer(WebsocketConsumer):
+class ChatConsumer(AsyncWebsocketConsumer):
     """
         On initial request, validate user before allowing connection to be accepted
     """
     #on intial request
-    def connect(self):
+    async def connect(self):
 
         self.room_name = self.scope['url_route']['kwargs']['room_name']
         self.room_group_name = f'chat_{self.room_name}'
         
-        async_to_sync(self.channel_layer.group_add)(
+        await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
 
         # accept connection
-        self.accept()
-
+        await self.accept()
+        unread = sync_to_async(get_msg_count)(self.scope['user'])
         # send response
-        self.send(text_data=json.dumps({
+        await self.send(text_data=json.dumps({
             'type':'connection_established',
-            'message':'You are connected'
+            'message':'You are connected',
+            'unread':unread
         }))
+
     
-    def receive(self, text_data):
+    async def receive(self, text_data):
         # get data sent from front end
         text_data_json = json.loads(text_data)
         # message 
@@ -60,7 +66,9 @@ class ChatConsumer(WebsocketConsumer):
         # extract chat ID
         chat_id = int(self.scope['url_route']['kwargs']['room_name'])
         try:
-            _chat = Chat.objects.get(id = chat_id)
+
+            _chat = await database_sync_to_async(Chat.objects.get)(id = chat_id)
+        
         except Chat.DoesNotExist:
             self.close()
         _requesting_user = self.scope['user']
@@ -73,18 +81,38 @@ class ChatConsumer(WebsocketConsumer):
                 if _[0] == b'origin':
                     host = _[1].decode('utf-8')
                     break
-            chat_user = ChatUser.objects.get(user = sender)
+            chat_user = await database_sync_to_async(ChatUser.objects.get)(user = sender)
             # if message is valid, create.
             if message != None or data != None:
-                new_message = Message.objects.create(message = message, chat = _chat, user = chat_user, media = data)
-                print(MessageSerializer(new_message).data)
-                _serialized_data = _serialize_message(user = _requesting_user, base = host,  message= new_message)
+                new_message = await database_sync_to_async(Message.objects.create)(message = message, chat = _chat, user = chat_user, media = data)
+                
+                # boradcast chat id to chat list consumer of other user after creation
+                
+                #get receiver id
+                if sender.id == _chat.user_1:
+                    receiver_id = int(_chat.user_2)
+                else:
+                    receiver_id = int(_chat.user_1)
+                receiver = f'user_{sender.id}'
+                
+                # sene message to that user consumer
+
+                
+                await self.channel_layer.group_send(
+                    f"user_{receiver_id}",
+                    {
+                        'type':'new_message_signal',
+                        'chat_id' : _chat.id
+                    }
+                )
+                
+                _serialized_data = await database_sync_to_async(_serialize_message)(user = _requesting_user, base = host,  message= new_message)
                 # set up alert both users of new message
                 _chat.user_1_has_read = False
                 _chat.user_2_has_read = False
-                _chat.save()
+                await database_sync_to_async(_chat.save)()
                 # broadcast to group
-                async_to_sync(self.channel_layer.group_send)(
+                await self.channel_layer.group_send(
                     self.room_group_name,
                     {
                         'type':'chat_message',
@@ -92,45 +120,76 @@ class ChatConsumer(WebsocketConsumer):
                     }
                 )
         
-    def chat_message(self, event):
+    async def chat_message(self, event):
         message = event['message']
         # get user to check if message being broadcast to them was sent by them
         user = self.scope['user']
-        chat_user = ChatUser.objects.get(user = user)
+        chat_user = await database_sync_to_async(ChatUser.objects.get)(user = user)
         if chat_user.id != message['user']:
             message['from'] = True
         else:
             message['from'] = False
         # get chat to mark all users currently in connection as read
-        chat = Chat.objects.get(id =  int(message['chat']))
+        chat = await database_sync_to_async(Chat.objects.get)(id =  int(message['chat']))
         if user.id == chat.user_1:
             chat.user_1_has_read = True
         if user.id == chat.user_2:
             chat.user_2_has_read = True
-        chat.save()
+        await database_sync_to_async(chat.save)()
         # send response
-        self.send(json.dumps({
+        await self.send(json.dumps({
             'type':'new_message',
             'message' : message
         }))
 
 
-class ChatListConsumer(WebsocketConsumer):
-    def connect(self):
-        print('here')
+class ChatListConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
         user = self.scope['user']
-        print(user)
+        self.room_group_name = f"user_{user.id}"
 
-        self.accept();
-        self.send(text_data=json.dumps({
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+        print(self.room_group_name)
+        # get chat user object
+        unread = await sync_to_async(get_msg_count)(user)
+        await self.send(text_data=json.dumps({
+            'type' : 'msg_count',
+            'count' : unread
+        }))
+        # get
+
+        await self.send(text_data=json.dumps({
             'type' : 'connected',
             'message':'You have been connected'
-        }));
+        }))
 
-    def receive(self, text_data):
+
+    async def receive(self, text_data, event):
+
+        print(event)
         data =  json.loads(text_data)
         print(data)
-        self.send(text_data=json.dumps({
-            'type' : 'response',
-            'message' : 'HI client.'
-        }))
+
+        
+    async def new_message_signal(self, event):
+        print(self.room_group_name)
+        unread = await sync_to_async(get_msg_count)(self.scope['user'])
+        event['unread'] = unread
+        print(unread)
+        await self.send(text_data=json.dumps(event))
+
+def get_msg_count(user_obj):
+    _chat_user, created = ChatUser.objects.get_or_create(user = user_obj) # get chat user
+    chats = Chat.objects.filter(Q(user_1 = _chat_user.id) | Q(user_2 = _chat_user.id))
+    unread = 0
+    for c in chats:
+        if c.user_1 == _chat_user.id and not c.user_1_has_read:
+            unread+=1
+        if c.user_2 == _chat_user.id and not c.user_2_has_read:
+            unread +=1
+    return unread
