@@ -173,6 +173,7 @@ def get_all_messages(chat_id, user_id):
 def show_chat(request, chat_id):
     # get chat ID from request object and use it to get the chat object
     chat_id = int(chat_id)
+
     # get all messages for this chat id and store in query set
     messages = get_all_messages(chat_id=chat_id ,user_id=request.user.id)
     # run the message_s() function. It takes messages and request and returns 

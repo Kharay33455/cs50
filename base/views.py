@@ -12,13 +12,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.middleware.csrf import get_token
 from django.db import IntegrityError
 from chat.models import ChatUser
-
+from channels.layers import get_channel_layer
+from asgiref.sync import sync_to_async, async_to_sync
 
 class UserViewSet(viewsets.ModelViewSet):
     """API endpoint to allow viewing and editing User model"""
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+
 
 # function to get details about person from person object
 def get_all_from_person(request, person):
@@ -176,7 +178,9 @@ def base(request):
     context = {'posts':[], 'user_data': {}}
     #  get user pfp if available
     user_pfp = "None"
+    signed_in = False
     if request.user.is_authenticated:
+        signed_in = True
         context['user_data']['id'] = request.user.id
         person = Person.objects.get(user = request.user)
         # Append pfp if avaivable
@@ -235,6 +239,7 @@ def base(request):
         # truncate post and only return the first 150 values
         if len(c['post']) > 150:
             c['post'] = c['post'][0:150] + "..."
+    context['signed_in'] = signed_in
     # return json
     return Response(context, status=200)
 
@@ -335,7 +340,6 @@ def allegiances(request):
             # if they are reacting to their own post, no need to inform them
             if request.user != post.op:
                 Notification.objects.get_or_create(type=type, message = message, person = person, associated_user = post.op, id_item = post_id)
-
             # set their new allegiance
             current_allegiance.allegiance = allege
         # check if this is a share, not just a like
