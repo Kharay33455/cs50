@@ -414,7 +414,8 @@ def extend_post(request):
         i = 1
         while i < 5:
             if context['post'][f'media{i}']:
-                context['post'][f'media{i}'] = add_base(request, "/"+context['post'][f'media{i}'])
+                context['post'][f'media{i}'] = add_base(request, context['post'][f'media{i}'])
+                print(context['post'][f'media{i}'])
             i += 1
         _person =  Person.objects.get(user = request.user)
         _person_ = PersonSerializer(_person)

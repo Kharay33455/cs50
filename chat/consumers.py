@@ -100,12 +100,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # make sure user is in the conversation before attempting to create message
         if _chat.user_1 == _requesting_user.id or _chat.user_2 == _requesting_user.id:
             # get host address from header dictionary
-            base = self.scope['headers']
-            host = ''
-            for _ in base:
-                if _[0] == b'origin':
-                    host = _[1].decode('utf-8')
-                    break
+            host = await sync_to_async(get_host)(self)
+           
             chat_user = await database_sync_to_async(ChatUser.objects.get)(user = sender)
             # if message is valid, create.
             if message != None or data != None:
@@ -149,7 +145,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
     async def chat_message(self, event):
         message = event['message']
-        print(message)
         # get user to check if message being broadcast to them was sent by them
         user = self.scope['user']
         chat_user = await database_sync_to_async(ChatUser.objects.get)(user = user)
@@ -159,14 +154,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message['from'] = False
         # get chat to mark all users currently in connection as read
         chat = await database_sync_to_async(Chat.objects.get)(id =  int(message['chat']))
-        await sync_to_async(print)(chat.user_2)
         if user.id == chat.user_1:
-            print('read by user', user.id)
             user_id = user.id
             chat.user_1_has_read = True
         if user.id == chat.user_2:
             user_id = user.id
-            print('read by user', user.id)
             chat.user_2_has_read = True
             
         await database_sync_to_async(chat.save)()
@@ -195,7 +187,6 @@ class ChatListConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
-        print(self.room_group_name)
         """Get message count"""
         # get chat user object
         _ = await sync_to_async(get_msg_count)(user)
@@ -224,7 +215,6 @@ class ChatListConsumer(AsyncWebsocketConsumer):
         user = self.scope['user']
         data =  json.loads(text_data)
         if data['message'] == 'get_notif_count':
-            print('jere')
             await self.channel_layer.group_send(
                 f'user_{user.id}',
                 {
@@ -232,11 +222,18 @@ class ChatListConsumer(AsyncWebsocketConsumer):
                     'message':'get_notif_count'
                 }
             )
+        if data['message'] == 'search':
+            await self.channel_layer.group_send(
+                f'user_{user.id}',
+                {
+                    'type' : data['message'],
+                    'message' : data['value']
+                }
+            )
 
         
     async def new_message_signal(self, event):
 
-        print(self.room_group_name)
         _ = await sync_to_async(get_msg_count)(self.scope['user'])
         event['unread'] = _['unread']
         event['unread_ids'] = _['unread_ids']
@@ -251,6 +248,39 @@ class ChatListConsumer(AsyncWebsocketConsumer):
             'type': 'notif_count',
             'notif_count' : notif_count
         }))
+
+    # search function
+    async def search(self, event):
+        if event['message'] == "":
+            context = []
+        else:
+            community = await database_sync_to_async(Community.objects.filter)(name__contains = event['message'])
+            context = await sync_to_async(construct_community)(community, self)
+        await self.send(text_data=json.dumps({
+            'type' : event['type'],
+            'message' : context
+        }))        
+
+
+# serialize community
+def construct_community(community_list, self):
+    return_list = []
+    for _ in community_list:
+        return_dict = {} # store temporary values
+        return_dict['name'] = _.name
+        return_dict['is_private'] = _.is_private
+        return_dict['creator'] = _.creator.display_name
+        if _.pfp:
+            host = get_host(self)
+            return_dict['pfp'] = host + '/media/' + str(_.pfp)
+        else:
+            return_dict['pfp'] = None
+        return_dict['comm_id'] = _.id
+        # append to list
+        return_list.append(return_dict)
+    
+    return return_list
+
         
 
 
@@ -272,5 +302,13 @@ def get_msg_count(user_obj):
     return_dict = {}
     return_dict['unread'] = unread
     return_dict['unread_ids'] = unread_id
-    print(unread_id)
     return return_dict
+
+def get_host(self):
+    base = self.scope['headers']
+    host = ''
+    for _ in base:
+        if _[0] == b'origin':
+            host = _[1].decode('utf-8')
+            break
+    return host 
