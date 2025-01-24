@@ -7,12 +7,16 @@ from base.serializers import PersonSerializer
 from base.views import add_base
 from datetime import datetime
 from django.middleware.csrf import get_token
+import pytz
 
 
 # Create your views here.
 def get_today():
-    today = datetime.today()
+    #today = datetime.today()
+    _ = datetime.now(pytz.utc)
+    today = _.astimezone(pytz.timezone('Europe/Paris'))
     _return = str(today)[:10]
+    print(_return)
     return _return
 
 # process time
@@ -23,8 +27,9 @@ def process_time(time, true_time = False):
     if true_time == True:
         return time
     if date != get_today():
+        print('data is ', date)
         if  int(get_today()[-2:]) -  int(date[-2:]) > 1:
-            time = date + ' '+ time
+            time = date
         else:
 
             time = 'Yesterday'
@@ -382,7 +387,7 @@ def get_messages_for_community(request):
 
     """Get all messages belonging to that community"""
     message_list = []
-    messages = CommunityMessage.objects.filter(community = _community)
+    messages = CommunityMessage.objects.filter(community = _community).order_by('-created')
     context = {}
     for _ in messages:
         __ = CommunityMessageSerializer(_)
