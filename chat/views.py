@@ -181,51 +181,6 @@ def show_chat(request, chat_id):
     context['other_user_id'] = messages['other_user_id']
     return Response(context, status=200)
 
-
-# api for processing new messages sent
-@api_view(['GET', 'POST'])
-def send_message(request):
-    if not request.user.is_authenticated:
-        return Response({'err':'Sign in to continue'}, status=301)
-    # get text and strip of white spaces
-    text = str(request.data['caption'])
-    text = text.strip()
-    # check if text is an empty string
-    if text == '':
-        text = None
-    # check for photo and append, if none, return none as image
-    if request.FILES.get('image'):
-        image = request.FILES.get('image')
-    else:
-        image = None
-    # if both image and text is null, then it's not a valid message.
-    if text == None and image == None:
-        return Response({'msg':'No valid message'}, status= 201) 
-    # if all is well, get chat and create new message
-    chat_id = request.data['id']
-    chat = Chat.objects.get(id = chat_id)
-    chat_user = ChatUser.objects.get(user = request.user)
-    message = Message.objects.create(message = text, media = image, chat = chat, user = chat_user)
-    message.save()
-    "Get other user and change their has_new_message field to True"
-    # get other user Id and alert other user of their new message
-    if request.user.id == chat.user_1:
-        other_user_id = chat.user_2
-        chat.user_2_has_read = False
-    else:
-        chat.user_1_has_read = False
-        other_user_id = chat.user_1
-    chat.save() # save chat
-    # get chat object and set has_new_message to True
-    other_user = ChatUser.objects.get(user = User.objects.get(id = other_user_id))
-    other_user.has_new_message = True
-    other_user.save()
-
-    _message_list = Message.objects.filter(chat = chat)
-    context =  message_s(request, _message_list)
-    return Response(context, status=200)
-
-
 # create a new post
 @api_view(['GET', 'POST'])
 def new_post(request):

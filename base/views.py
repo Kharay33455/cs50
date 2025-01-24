@@ -1,6 +1,6 @@
 from django.shortcuts import render
 # Create your views here.
-from rest_framework import serializers, permissions, viewsets
+from rest_framework import permissions, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.contrib.auth.models import User
@@ -8,12 +8,11 @@ from .serializers import *
 from .models import *
 from django.contrib.auth import login, logout, authenticate
 import string
-from django.views.decorators.csrf import csrf_exempt
 from django.middleware.csrf import get_token
 from django.db import IntegrityError
 from chat.models import ChatUser
-from channels.layers import get_channel_layer
-from asgiref.sync import sync_to_async, async_to_sync
+from geopy.distance import geodesic
+
 
 class UserViewSet(viewsets.ModelViewSet):
     """API endpoint to allow viewing and editing User model"""
@@ -21,6 +20,27 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+
+"""
+    Function to get distance between 2 users from their corrdinates.
+    Returns distance in miles
+"""
+def calc_distance(lat1 , long1, lat2, long2):
+    # lat and long for user1 and user2
+    coord1 = (lat1, long1)
+    coord2 = (lat2, long2)
+
+    #integer of distance
+    distance = int(geodesic(coord1, coord2).miles)
+    
+    if distance > 999:
+        distance = str(distance)
+        distance = distance[:-3] + ',' + distance[-3:] + ' miles'
+    elif distance < 2:
+        distance = 'Walking distance'
+    else:
+        distance = str(distance) + ' miles'
+    return distance
 
 # function to get details about person from person object
 def get_all_from_person(request, person):
@@ -58,6 +78,7 @@ def get_all_from_person(request, person):
         _context['op_display_name'] = original_poster.display_name
         _context['op_user_name'] = original_poster.user.username
         _context['op_user_id'] = original_poster.user.id
+        
         if original_poster.pfp:
             _context['op_pfp'] = add_base(request, '/media/' + str(original_poster.pfp))
         _context['post_id'] = post.id
@@ -182,10 +203,10 @@ def base(request):
     if request.user.is_authenticated:
         signed_in = True
         context['user_data']['id'] = request.user.id
-        person = Person.objects.get(user = request.user)
+        viewing_person = Person.objects.get(user = request.user)
         # Append pfp if avaivable
-        if person.pfp:
-            user_pfp = str(person.pfp)
+        if viewing_person.pfp:
+            user_pfp = str(viewing_person.pfp)
             if user_pfp != "None":
                 user_pfp = add_base(request, "/media/" + user_pfp)
         
@@ -194,6 +215,7 @@ def base(request):
     context['user_data']['pfp'] = user_pfp
 
     for post in posts[:25]:
+
         p = PostSerializer(post)
         _post = p.data
         # get op id. WE have edited it to name in down this function.
@@ -233,6 +255,13 @@ def base(request):
         c['ghost_likes'] = thousands(c['ghost_likes'])
         c['comments'] = thousands(c['comments'])
         c['shares'] = thousands(c['shares'])
+        # distance of poster from viewing user
+        try:
+            c['distance'] = calc_distance(person.lat, person.long, viewing_person.lat, viewing_person.long)
+        except Exception as e:
+            Error.objects.create(error = e)
+            c['distance'] = '14,000 miles'
+
         # if person ha profile picture, append profile picture
         if person.pfp:
             c['oppfp'] = add_base(request, "/media/"+str(person.pfp))
@@ -245,6 +274,12 @@ def base(request):
 
 # testing static config
 def bases(request):
+    persons = Person.objects.all()
+    import random
+    for _ in persons:
+        _.lat = random.randint(-89, 89)
+        _.long = random.randint(-179,179)
+        _.save()
 
     return render(request, 'base/index.html')
 
