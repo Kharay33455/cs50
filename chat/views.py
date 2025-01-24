@@ -16,7 +16,6 @@ def get_today():
     _ = datetime.now(pytz.utc)
     today = _.astimezone(pytz.timezone('Europe/Paris'))
     _return = str(today)[:10]
-    print(_return)
     return _return
 
 # process time
@@ -27,7 +26,6 @@ def process_time(time, true_time = False):
     if true_time == True:
         return time
     if date != get_today():
-        print('data is ', date)
         if  int(get_today()[-2:]) -  int(date[-2:]) > 1:
             time = date
         else:

@@ -294,7 +294,6 @@ class CommunityChatConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
             await self.accept()
-            await sync_to_async(print)('Socket now open')
 
     # send new community messages
     async def receive(self, text_data):
